@@ -4,13 +4,13 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.os.SystemClock
 import android.widget.RemoteViews
 import kotlin.math.cos
 import kotlin.math.sin
@@ -18,11 +18,11 @@ import kotlin.math.sin
 class ClockWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         update(context, manager, ids)
-        scheduleNextMinute(context)
+        schedule(context)
     }
 
     override fun onEnabled(context: Context) {
-        scheduleNextMinute(context)
+        schedule(context)
     }
 
     override fun onDisabled(context: Context) {
@@ -30,19 +30,46 @@ class ClockWidgetProvider : AppWidgetProvider() {
         alarm.cancel(pendingIntent(context))
     }
 
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        when (intent.action) {
+            ACTION_TOGGLE_SECONDS -> {
+                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val enabled = !prefs.getBoolean(KEY_SECONDS, true)
+                prefs.edit().putBoolean(KEY_SECONDS, enabled).apply()
+                val manager = AppWidgetManager.getInstance(context)
+                val ids = manager.getAppWidgetIds(ComponentName(context, ClockWidgetProvider::class.java))
+                update(context, manager, ids)
+                schedule(context)
+            }
+            ACTION_TICK -> {
+                val manager = AppWidgetManager.getInstance(context)
+                val ids = manager.getAppWidgetIds(ComponentName(context, ClockWidgetProvider::class.java))
+                update(context, manager, ids)
+                schedule(context)
+            }
+        }
+    }
+
     companion object {
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
+        private const val ACTION_TOGGLE_SECONDS = "com.mehdi.analogclock.TOGGLE_SECONDS"
+        private const val PREFS = "clock_widget_prefs"
+        private const val KEY_SECONDS = "show_seconds"
 
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
-            val bitmap = drawClock()
+            val showSeconds = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SECONDS, true)
+            val bitmap = drawClock(showSeconds)
             ids.forEach { id ->
                 val views = RemoteViews(context.packageName, R.layout.widget_clock)
                 views.setImageViewBitmap(R.id.clock_image, bitmap)
+                views.setOnClickPendingIntent(R.id.clock_image, togglePendingIntent(context))
                 manager.updateAppWidget(id, views)
             }
         }
 
-        private fun drawClock(): Bitmap {
+        private fun drawClock(showSeconds: Boolean): Bitmap {
             val size = 512
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -83,7 +110,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val second = cal.get(java.util.Calendar.SECOND)
             drawHand(canvas, center, 150f, (hour + minute / 60f) * 30f, 18f, 0xFFF3F5F7.toInt())
             drawHand(canvas, center, 195f, (minute + second / 60f) * 6f, 12f, 0xFFD7DEE8.toInt())
-            drawHand(canvas, center, 205f, second * 6f, 5f, 0xFFE05B5B.toInt())
+            if (showSeconds) {
+                drawHand(canvas, center, 205f, second * 6f, 5f, 0xFFE05B5B.toInt())
+            }
 
             paint.color = 0xFFE05B5B.toInt()
             canvas.drawCircle(center, center, 13f, paint)
@@ -110,26 +139,34 @@ class ClockWidgetProvider : AppWidgetProvider() {
             canvas.drawLine(center, center, center + cos(angle).toFloat() * length, center + sin(angle).toFloat() * length, paint)
         }
 
-        private fun scheduleNextMinute(context: Context) {
+        private fun schedule(context: Context) {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val now = System.currentTimeMillis()
-            val next = now - (now % 60000L) + 60000L
-            alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pendingIntent(context))
+            val showSeconds = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SECONDS, true)
+            alarm.cancel(pendingIntent(context))
+            if (showSeconds) {
+                alarm.setRepeating(AlarmManager.RTC, System.currentTimeMillis() + 1000L, 1000L, pendingIntent(context))
+            } else {
+                val now = System.currentTimeMillis()
+                val next = now - (now % 60000L) + 60000L
+                alarm.set(AlarmManager.RTC, next, pendingIntent(context))
+            }
         }
 
         private fun pendingIntent(context: Context): PendingIntent {
             val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TICK)
-            return PendingIntent.getBroadcast(context, 1001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            return PendingIntent.getBroadcast(
+                context, 1001, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
-    }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(android.content.ComponentName(context, ClockWidgetProvider::class.java))
-            update(context, manager, ids)
-            scheduleNextMinute(context)
+        private fun togglePendingIntent(context: Context): PendingIntent {
+            val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TOGGLE_SECONDS)
+            return PendingIntent.getBroadcast(
+                context, 1002, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
     }
 }
