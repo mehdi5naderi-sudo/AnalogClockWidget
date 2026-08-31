@@ -1,1 +1,6 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/clock" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#10141C" android:padding="6dp"><ImageView android:id="@+id/face" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/clock_face" android:scaleType="fitCenter" /></FrameLayout>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/clock" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#10141C" android:padding="6dp">
+<ImageView android:id="@+id/face" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/clock_face" android:scaleType="fitCenter" />
+<ImageView android:id="@+id/hour" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/hand_hour" android:scaleType="fitCenter" />
+<ImageView android:id="@+id/minute" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/hand_minute" android:scaleType="fitCenter" />
+<ImageView android:id="@+id/second" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/hand_second" android:scaleType="fitCenter" />
+</FrameLayout>
