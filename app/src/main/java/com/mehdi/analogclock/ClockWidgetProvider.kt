@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.widget.RemoteViews
 import kotlin.math.cos
 import kotlin.math.sin
@@ -108,10 +109,11 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val hour = cal.get(java.util.Calendar.HOUR)
             val minute = cal.get(java.util.Calendar.MINUTE)
             val second = cal.get(java.util.Calendar.SECOND)
+            val millis = cal.get(java.util.Calendar.MILLISECOND)
             drawHand(canvas, center, 150f, (hour + minute / 60f) * 30f, 18f, 0xFFF3F5F7.toInt())
             drawHand(canvas, center, 195f, (minute + second / 60f) * 6f, 12f, 0xFFD7DEE8.toInt())
             if (showSeconds) {
-                drawHand(canvas, center, 205f, second * 6f, 5f, 0xFFE05B5B.toInt())
+                drawHand(canvas, center, 205f, (second + millis / 1000f) * 6f, 5f, 0xFFE05B5B.toInt())
             }
 
             paint.color = 0xFFE05B5B.toInt()
@@ -145,11 +147,20 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 .getBoolean(KEY_SECONDS, true)
             alarm.cancel(pendingIntent(context))
             if (showSeconds) {
-                alarm.setRepeating(AlarmManager.RTC, System.currentTimeMillis() + 1000L, 1000L, pendingIntent(context))
+                val next = System.currentTimeMillis() + 1000L
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pendingIntent(context))
+                } else {
+                    alarm.setExact(AlarmManager.RTC, next, pendingIntent(context))
+                }
             } else {
                 val now = System.currentTimeMillis()
                 val next = now - (now % 60000L) + 60000L
-                alarm.set(AlarmManager.RTC, next, pendingIntent(context))
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pendingIntent(context))
+                } else {
+                    alarm.setExact(AlarmManager.RTC, next, pendingIntent(context))
+                }
             }
         }
 
