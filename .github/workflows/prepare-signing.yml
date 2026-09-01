@@ -1,6 +1,9 @@
 name: Prepare signing keystore
 
 on:
+  push:
+    paths:
+      - '.github/workflows/prepare-signing.yml'
   workflow_dispatch:
 
 jobs:
@@ -13,25 +16,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Generate keystore
+      - name: Generate canonical keystore
         run: |
           keytool -genkeypair -v \
             -keystore release.keystore \
-            -storepass "AnalogClockStore2026!" \
-            -keypass "AnalogClockKey2026!" \
+            -storetype PKCS12 \
+            -storepass 'AnalogClockStore2026!' \
+            -keypass 'AnalogClockKey2026!' \
             -alias analogclock \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=AnalogClock, OU=App, O=Mehdi, L=Helsinki, ST=Uusimaa, C=FI"
+            -dname 'CN=Analog Clock Widget, OU=Personal, O=Mehdi, L=Private, S=Private, C=FI'
+          base64 -w 0 release.keystore > release.keystore.b64
 
-      - name: Encode keystore
-        run: base64 -w 0 release.keystore > release.keystore.b64
-
-      - name: Upload keystore package
+      - name: Upload canonical signing package
         uses: actions/upload-artifact@v4
         with:
-          name: AnalogClock-signing-keystore
+          name: AnalogClockWidget-signing-canonical
           path: |
             release.keystore
             release.keystore.b64
+          retention-days: 7
