@@ -1,0 +1,37 @@
+name: Prepare signing keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -storepass "AnalogClockStore2026!" \
+            -keypass "AnalogClockKey2026!" \
+            -alias analogclock \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=AnalogClock, OU=App, O=Mehdi, L=Helsinki, ST=Uusimaa, C=FI"
+
+      - name: Encode keystore
+        run: base64 -w 0 release.keystore > release.keystore.b64
+
+      - name: Upload keystore package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnalogClock-signing-keystore
+          path: |
+            release.keystore
+            release.keystore.b64
