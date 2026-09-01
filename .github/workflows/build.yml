@@ -29,67 +29,26 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle.zip
 
-      - name: Bootstrap release keystore if secrets are not configured
-        id: bootstrap
+      - name: Validate signing secrets
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          if [ -n "$RELEASE_KEYSTORE_B64" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "No release signing secret found. Creating a one-time bootstrap keystore."
-          STORE_PASSWORD="$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 24)"
-          KEY_PASSWORD="$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 24)"
-          KEY_ALIAS="analogclock"
-
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -storetype PKCS12 \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$STORE_PASSWORD" \
-            -keypass "$KEY_PASSWORD" \
-            -dname "CN=Analog Clock Widget, OU=Personal, O=Mehdi, L=Private, S=Private, C=FI"
-
-          base64 -w 0 release.keystore > release.keystore.b64
-          {
-            echo "KEY_ALIAS=$KEY_ALIAS"
-            echo "STORE_PASSWORD=$STORE_PASSWORD"
-            echo "KEY_PASSWORD=$KEY_PASSWORD"
-          } > release-signing-credentials.txt
-
-          echo "configured=false" >> "$GITHUB_OUTPUT"
-
-      - name: Upload one-time signing bootstrap
-        if: steps.bootstrap.outputs.configured == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnalogClockWidget-signing-bootstrap
-          path: |
-            release.keystore
-            release.keystore.b64
-            release-signing-credentials.txt
-          retention-days: 1
-
-      - name: Stop after bootstrap
-        if: steps.bootstrap.outputs.configured == 'false'
-        run: |
-          echo "Signing bootstrap artifact created. Download it, add the four GitHub Actions secrets, then re-run this workflow."
-          exit 1
+          test -n "$RELEASE_KEYSTORE_B64" || { echo "Missing RELEASE_KEYSTORE_B64"; exit 1; }
+          test -n "$RELEASE_STORE_PASSWORD" || { echo "Missing RELEASE_STORE_PASSWORD"; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo "Missing RELEASE_KEY_ALIAS"; exit 1; }
+          test -n "$RELEASE_KEY_PASSWORD" || { echo "Missing RELEASE_KEY_PASSWORD"; exit 1; }
 
       - name: Prepare release keystore
-        if: steps.bootstrap.outputs.configured == 'true'
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
         run: |
           echo "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
+          test -s release.keystore
 
       - name: Build signed release APK
-        if: steps.bootstrap.outputs.configured == 'true'
         env:
           RELEASE_KEYSTORE_PATH: release.keystore
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -98,7 +57,6 @@ jobs:
         run: ./gradle-8.10.2/bin/gradle --no-daemon assembleRelease
 
       - name: Upload signed APK
-        if: steps.bootstrap.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AnalogClockWidget-release-apk
