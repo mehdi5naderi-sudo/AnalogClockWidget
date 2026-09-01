@@ -29,24 +29,26 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle.zip
 
-      - name: Validate signing secrets
+      - name: Diagnose signing secrets safely
         env:
-          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KS: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          SP: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          AL: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KP: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          test -n "$RELEASE_KEYSTORE_B64" || { echo "Missing RELEASE_KEYSTORE_B64"; exit 1; }
-          test -n "$RELEASE_STORE_PASSWORD" || { echo "Missing RELEASE_STORE_PASSWORD"; exit 1; }
-          test -n "$RELEASE_KEY_ALIAS" || { echo "Missing RELEASE_KEY_ALIAS"; exit 1; }
-          test -n "$RELEASE_KEY_PASSWORD" || { echo "Missing RELEASE_KEY_PASSWORD"; exit 1; }
+          echo "RELEASE_KEYSTORE_B64 length: ${#KS}"
+          echo "RELEASE_STORE_PASSWORD present: $([ -n "$SP" ] && echo yes || echo no)"
+          echo "RELEASE_KEY_ALIAS present: $([ -n "$AL" ] && echo yes || echo no)"
+          echo "RELEASE_KEY_PASSWORD present: $([ -n "$KP" ] && echo yes || echo no)"
+          test -n "$KS" && test -n "$SP" && test -n "$AL" && test -n "$KP"
 
       - name: Prepare release keystore
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
         run: |
-          echo "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
-          test -s release.keystore
+          printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
+          keytool -list -keystore release.keystore -storepass "${{ secrets.RELEASE_STORE_PASSWORD }}" -alias "${{ secrets.RELEASE_KEY_ALIAS }}" >/dev/null
+          echo "Signing keystore and alias/password are valid."
 
       - name: Build signed release APK
         env:
