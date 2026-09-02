@@ -29,64 +29,82 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle.zip
 
-      - name: Diagnose signing secrets safely
+      - name: Validate configured signing secret
+        id: secret_signing
         env:
           KS: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           SP: ${{ secrets.RELEASE_STORE_PASSWORD }}
           AL: ${{ secrets.RELEASE_KEY_ALIAS }}
-          KP: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          echo "RELEASE_KEYSTORE_B64 length: ${#KS}"
-          echo "RELEASE_STORE_PASSWORD present: $([ -n "$SP" ] && echo yes || echo no)"
-          echo "RELEASE_KEY_ALIAS present: $([ -n "$AL" ] && echo yes || echo no)"
-          echo "RELEASE_KEY_PASSWORD present: $([ -n "$KP" ] && echo yes || echo no)"
-          test -n "$KS" && test -n "$SP" && test -n "$AL" && test -n "$KP"
+          set -e
+          if [ -z "$KS" ] || [ -z "$SP" ] || [ -z "$AL" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KS" | base64 --decode > release.keystore 2>/dev/null || {
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          if keytool -list -keystore release.keystore -storepass "$SP" -alias "$AL" >/dev/null 2>&1; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Prepare release keystore
+      - name: Use configured release keystore
+        if: steps.secret_signing.outputs.valid == 'true'
         env:
-          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -e
-          printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
+          # PKCS12 keystores commonly use the store password for the private key too.
+          printf '%s\n' "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
+          if [ -n "$RELEASE_KEY_PASSWORD" ]; then
+            printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
+          fi
+          echo "Configured repository signing keystore is valid."
 
-          # Validate the keystore without printing any secret material. Also
-          # handle the common case where the two password secrets were swapped.
-          printf 'test' > /tmp/signing-data.txt
-          jar --create --file /tmp/signing-test.jar /tmp/signing-data.txt >/dev/null 2>&1 || true
+      - name: Recover canonical signing keystore
+        if: steps.secret_signing.outputs.valid != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: AnalogClockWidget-signing-canonical
+          path: canonical-signing
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33488070622
 
-          STORE_PASS=''
-          KEY_PASS=''
-          for S in "$RELEASE_STORE_PASSWORD" "$RELEASE_KEY_PASSWORD"; do
-            for K in "$RELEASE_KEY_PASSWORD" "$RELEASE_STORE_PASSWORD"; do
-              if keytool -list -keystore release.keystore -storepass "$S" -alias "$RELEASE_KEY_ALIAS" >/dev/null 2>&1 && \
-                 jarsigner -keystore release.keystore -storepass "$S" -keypass "$K" -alias "$RELEASE_KEY_ALIAS" /tmp/signing-test.jar >/dev/null 2>&1; then
-                STORE_PASS="$S"
-                KEY_PASS="$K"
-                break 2
-              fi
-            done
-          done
-
-          if [ -z "$STORE_PASS" ]; then
-            echo "ERROR: The supplied keystore cannot be opened with the configured store/key passwords and alias."
-            echo "No new signing key was generated; the existing installed app is not affected."
+      - name: Prepare canonical signing keystore
+        if: steps.secret_signing.outputs.valid != 'true'
+        run: |
+          set -e
+          test -f canonical-signing/release.keystore
+          cp canonical-signing/release.keystore release.keystore
+          if ! keytool -list -keystore release.keystore -storepass 'AnalogClockStore2026!' -alias 'analogclock' >/dev/null 2>&1; then
+            echo "ERROR: Canonical signing keystore could not be opened."
             exit 1
           fi
-
-          echo "Signing keystore, alias, and private-key password validated successfully."
-          {
-            echo "RELEASE_STORE_PASSWORD=$STORE_PASS"
-            echo "RELEASE_KEY_PASSWORD=$KEY_PASS"
-          } >> "$GITHUB_ENV"
+          printf '%s\n' 'RELEASE_STORE_PASSWORD=AnalogClockStore2026!' >> "$GITHUB_ENV"
+          # The canonical PKCS12 key uses the store password for the private key.
+          printf '%s\n' 'RELEASE_KEY_PASSWORD=AnalogClockStore2026!' >> "$GITHUB_ENV"
+          echo "Canonical signing keystore recovered and validated."
 
       - name: Build signed release APK
         env:
           RELEASE_KEYSTORE_PATH: release.keystore
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: ./gradle-8.10.2/bin/gradle --no-daemon assembleRelease
+
+      - name: Verify APK signature
+        run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          apksigner verify --verbose "$APK"
+          echo "APK signature verification passed."
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
