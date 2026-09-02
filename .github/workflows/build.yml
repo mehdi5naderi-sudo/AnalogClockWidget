@@ -45,10 +45,44 @@ jobs:
       - name: Prepare release keystore
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          set -e
           printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
-          keytool -list -keystore release.keystore -storepass "${{ secrets.RELEASE_STORE_PASSWORD }}" -alias "${{ secrets.RELEASE_KEY_ALIAS }}" >/dev/null
-          echo "Signing keystore and alias/password are valid."
+
+          # Validate the keystore without printing any secret material. The two
+          # configured passwords are also tested in swapped positions in case
+          # they were accidentally entered in reverse order.
+          : > /tmp/signing-test.txt
+          printf 'test' > /tmp/signing-data.txt
+          jar --create --file /tmp/signing-test.jar /tmp/signing-data.txt >/dev/null 2>&1 || true
+
+          STORE_PASS=''
+          KEY_PASS=''
+          for S in "$RELEASE_STORE_PASSWORD" "$RELEASE_KEY_PASSWORD"; do
+            for K in "$RELEASE_KEY_PASSWORD" "$RELEASE_STORE_PASSWORD"; do
+              if keytool -list -keystore release.keystore -storepass "$S" -alias "$RELEASE_KEY_ALIAS" >/dev/null 2>&1 && \
+                 jarsigner -keystore release.keystore -storepass "$S" -keypass "$K" -alias "$RELEASE_KEY_ALIAS" /tmp/signing-test.jar >/dev/null 2>&1; then
+                STORE_PASS="$S"
+                KEY_PASS="$K"
+                break 2
+              fi
+            done
+          done
+
+          if [ -z "$STORE_PASS" ]; then
+            echo "ERROR: The supplied keystore cannot be opened with the configured store/key passwords and alias."
+            echo "The APK was NOT rebuilt with a new signing key, so the existing installed app remains safe for updates."
+            exit 1
+          fi
+
+          echo "Signing keystore, alias, and private-key password validated successfully."
+          {
+            echo "RELEASE_STORE_PASSWORD=$STORE_PASS"
+            echo "RELEASE_KEY_PASSWORD=$KEY_PASS"
+          } >> "$GITHUB_ENV"
 
       - name: Build signed release APK
         env:
