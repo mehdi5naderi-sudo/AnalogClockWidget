@@ -58,7 +58,6 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -e
-          # PKCS12 keystores commonly use the store password for the private key too.
           printf '%s\n' "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
           if [ -n "$RELEASE_KEY_PASSWORD" ]; then
             printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
@@ -79,17 +78,20 @@ jobs:
 
       - name: Prepare canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: |
           set -e
           test -f canonical-signing/release.keystore
           cp canonical-signing/release.keystore release.keystore
-          if ! keytool -list -keystore release.keystore -storepass 'AnalogClockStore2026!' -alias 'analogclock' >/dev/null 2>&1; then
-            echo "ERROR: Canonical signing keystore could not be opened."
+          if ! keytool -list -keystore release.keystore -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "ERROR: Canonical signing keystore could not be opened with the configured store password/alias."
             exit 1
           fi
-          printf '%s\n' 'RELEASE_STORE_PASSWORD=AnalogClockStore2026!' >> "$GITHUB_ENV"
+          printf '%s\n' "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
           # The canonical PKCS12 key uses the store password for the private key.
-          printf '%s\n' 'RELEASE_KEY_PASSWORD=AnalogClockStore2026!' >> "$GITHUB_ENV"
+          printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "Canonical signing keystore recovered and validated."
 
       - name: Build signed release APK
