@@ -52,10 +52,8 @@ jobs:
           set -e
           printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > release.keystore
 
-          # Validate the keystore without printing any secret material. The two
-          # configured passwords are also tested in swapped positions in case
-          # they were accidentally entered in reverse order.
-          : > /tmp/signing-test.txt
+          # Validate the keystore without printing any secret material. Also
+          # handle the common case where the two password secrets were swapped.
           printf 'test' > /tmp/signing-data.txt
           jar --create --file /tmp/signing-test.jar /tmp/signing-data.txt >/dev/null 2>&1 || true
 
@@ -74,7 +72,7 @@ jobs:
 
           if [ -z "$STORE_PASS" ]; then
             echo "ERROR: The supplied keystore cannot be opened with the configured store/key passwords and alias."
-            echo "The APK was NOT rebuilt with a new signing key, so the existing installed app remains safe for updates."
+            echo "No new signing key was generated; the existing installed app is not affected."
             exit 1
           fi
 
@@ -87,9 +85,7 @@ jobs:
       - name: Build signed release APK
         env:
           RELEASE_KEYSTORE_PATH: release.keystore
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradle-8.10.2/bin/gradle --no-daemon assembleRelease
 
       - name: Upload signed APK
