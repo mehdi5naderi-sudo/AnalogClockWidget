@@ -74,7 +74,6 @@ jobs:
           path: canonical-signing
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: 33488070622
 
       - name: Prepare canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
