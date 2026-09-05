@@ -70,31 +70,15 @@ jobs:
           fi
           echo "Configured repository signing keystore is valid."
 
-      - name: Find latest successful canonical signing run
-        id: canonical_run
-        if: steps.secret_signing.outputs.valid != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?branch=main&status=success&per_page=100" \
-            --jq '.workflow_runs[] | select(.name == "Prepare signing") | .id' | head -n 1)
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "ERROR: No successful Prepare signing workflow run was found."
-            exit 1
-          fi
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "Using canonical signing workflow run: $RUN_ID"
-
       - name: Recover canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: AnalogClockWidget-signing-canonical
+          artifact-ids: 9925690541
           path: canonical-signing
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ steps.canonical_run.outputs.run_id }}
+          run-id: 33843516302
 
       - name: Prepare canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
