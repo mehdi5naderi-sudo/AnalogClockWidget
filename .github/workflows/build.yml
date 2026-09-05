@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -66,6 +70,25 @@ jobs:
           fi
           echo "Configured repository signing keystore is valid."
 
+      - name: Find latest successful canonical signing run
+        id: canonical_run
+        if: steps.secret_signing.outputs.valid != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/prepare-signing.yml/runs" \
+            -f branch=main \
+            -f status=success \
+            -f per_page=1 \
+            --jq '.workflow_runs[0].id')
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: No successful canonical signing workflow run was found."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Using canonical signing workflow run: $RUN_ID"
+
       - name: Recover canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
         uses: actions/download-artifact@v4
@@ -74,6 +97,7 @@ jobs:
           path: canonical-signing
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
+          run-id: ${{ steps.canonical_run.outputs.run_id }}
 
       - name: Prepare canonical signing keystore
         if: steps.secret_signing.outputs.valid != 'true'
