@@ -11,9 +11,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.os.SystemClock
 import android.widget.RemoteViews
+import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 
 class ClockWidgetProvider : AppWidgetProvider() {
@@ -22,9 +24,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         schedule(context)
     }
 
-    override fun onEnabled(context: Context) {
-        schedule(context)
-    }
+    override fun onEnabled(context: Context) { schedule(context) }
 
     override fun onDisabled(context: Context) {
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -57,6 +57,11 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val ACTION_TOGGLE_SECONDS = "com.mehdi.analogclock.TOGGLE_SECONDS"
         private const val PREFS = "clock_widget_prefs"
         private const val KEY_SECONDS = "show_seconds"
+
+        // First version uses a fixed Tehran location and needs no internet.
+        private const val LATITUDE = 35.6892
+        private const val LONGITUDE = 51.3890
+        private const val TIME_ZONE = "Asia/Tehran"
 
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
             val showSeconds = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -110,6 +115,56 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val minute = cal.get(java.util.Calendar.MINUTE)
             val second = cal.get(java.util.Calendar.SECOND)
             val millis = cal.get(java.util.Calendar.MILLISECOND)
+
+            val today = solarDay(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.DAY_OF_YEAR))
+            val tomorrowCal = cal.clone() as java.util.Calendar
+            tomorrowCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            val tomorrow = solarDay(
+                tomorrowCal.get(java.util.Calendar.YEAR),
+                tomorrowCal.get(java.util.Calendar.DAY_OF_YEAR)
+            )
+
+            // A compact glass-like panel in the lower part of the clock.
+            paint.style = Paint.Style.FILL
+            paint.color = 0xCC111821.toInt()
+            canvas.drawRoundRect(115f, 331f, 397f, 435f, 22f, 22f, paint)
+
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+
+            paint.textSize = 17f
+            paint.color = 0xFFFFC857.toInt()
+            canvas.drawText("☀", 151f, 356f, paint)
+            paint.color = 0xFFF3F5F7.toInt()
+            canvas.drawText(formatTime(today.sunrise), 194f, 357f, paint)
+
+            paint.color = 0xFFFFC857.toInt()
+            canvas.drawText("☀", 361f, 356f, paint)
+            paint.color = 0xFFF3F5F7.toInt()
+            canvas.drawText(formatTime(today.sunset), 318f, 357f, paint)
+
+            paint.textSize = 16f
+            paint.color = 0xFF8FA0B5.toInt()
+            canvas.drawText("طول روز", center, 383f, paint)
+
+            paint.textSize = 23f
+            paint.color = 0xFFF3F5F7.toInt()
+            canvas.drawText(formatDuration(today.dayLengthMinutes), center, 407f, paint)
+
+            val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
+            val arrow = if (delta > 0) "↑" else if (delta < 0) "↓" else "—"
+            val deltaText = if (delta == 0) {
+                "فردا  بدون تغییر"
+            } else {
+                "فردا  " + arrow + " " + formatDelta(abs(delta))
+            }
+            paint.textSize = 15f
+            paint.color = if (delta > 0) 0xFF6FD08C.toInt()
+            else if (delta < 0) 0xFFE58A8A.toInt()
+            else 0xFF9AA6B2.toInt()
+            canvas.drawText(deltaText, center, 430f, paint)
+
+            // Hands remain on top of the information area.
             drawHand(canvas, center, 150f, (hour + minute / 60f) * 30f, 18f, 0xFFF3F5F7.toInt())
             drawHand(canvas, center, 195f, (minute + second / 60f) * 6f, 12f, 0xFFD7DEE8.toInt())
             if (showSeconds) {
@@ -139,6 +194,73 @@ class ClockWidgetProvider : AppWidgetProvider() {
             paint.strokeWidth = width
             paint.strokeCap = Paint.Cap.ROUND
             canvas.drawLine(center, center, center + cos(angle).toFloat() * length, center + sin(angle).toFloat() * length, paint)
+        }
+
+        private data class SolarDay(
+            val sunrise: Int,
+            val sunset: Int,
+            val dayLengthMinutes: Int
+        )
+
+        private fun solarDay(year: Int, dayOfYear: Int): SolarDay {
+            val sunrise = solarEventMinutes(year, dayOfYear, true)
+            val sunset = solarEventMinutes(year, dayOfYear, false)
+            return SolarDay(sunrise, sunset, sunset - sunrise)
+        }
+
+        // NOAA-style calculation; no internet/API key is required.
+        private fun solarEventMinutes(year: Int, dayOfYear: Int, sunrise: Boolean): Int {
+            val gamma = 2.0 * Math.PI / 365.0 * (dayOfYear - 1)
+            val equationOfTime = 229.18 * (
+                0.000075 +
+                    0.001868 * cos(gamma) -
+                    0.032077 * sin(gamma) -
+                    0.014615 * cos(2 * gamma) -
+                    0.040849 * sin(2 * gamma)
+                )
+            val declination =
+                0.006918 -
+                    0.399912 * cos(gamma) +
+                    0.070257 * sin(gamma) -
+                    0.006758 * cos(2 * gamma) +
+                    0.000907 * sin(2 * gamma) -
+                    0.002697 * cos(3 * gamma) +
+                    0.00148 * sin(3 * gamma)
+
+            val latitudeRad = Math.toRadians(LATITUDE)
+            val zenithRad = Math.toRadians(90.833)
+            val cosHourAngle =
+                (cos(zenithRad) / (cos(latitudeRad) * cos(declination))) -
+                    (sin(latitudeRad) * sin(declination) /
+                        (cos(latitudeRad) * cos(declination)))
+
+            if (cosHourAngle <= -1.0) return if (sunrise) 0 else 1439
+            if (cosHourAngle >= 1.0) return 720
+
+            val hourAngle = Math.toDegrees(acos(cosHourAngle))
+            val solarNoon = 720.0 - 4.0 * LONGITUDE - equationOfTime
+            val utcMinutes = if (sunrise) solarNoon - hourAngle * 4.0 else solarNoon + hourAngle * 4.0
+
+            val tz = java.util.TimeZone.getTimeZone(TIME_ZONE)
+            val reference = java.util.Calendar.getInstance(tz)
+            val zoneOffsetMinutes = tz.getOffset(reference.timeInMillis) / 60000.0
+            return floor(utcMinutes + zoneOffsetMinutes + 0.5).toInt().coerceIn(0, 1439)
+        }
+
+        private fun formatTime(minutes: Int): String {
+            return "%02d:%02d".format(minutes / 60, minutes % 60)
+        }
+
+        private fun formatDuration(minutes: Int): String {
+            return "%02d:%02d".format(minutes / 60, minutes % 60)
+        }
+
+        private fun formatDelta(minutes: Int): String {
+            return if (minutes >= 60) {
+                (minutes / 60).toString() + "س " + "%02d".format(minutes % 60) + "د"
+            } else {
+                minutes.toString() + " دقیقه"
+            }
         }
 
         private fun schedule(context: Context) {
