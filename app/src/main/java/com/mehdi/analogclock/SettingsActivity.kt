@@ -101,7 +101,7 @@ class SettingsActivity : Activity() {
                 val ids = manager.getAppWidgetIds(
                     android.content.ComponentName(this@SettingsActivity, ClockWidgetProvider::class.java)
                 )
-                ClockWidgetProvider.update(this, manager, ids)
+                ClockWidgetProvider.update(this@SettingsActivity, manager, ids)
                 Toast.makeText(this@SettingsActivity, "تنظیمات ذخیره شد", Toast.LENGTH_SHORT).show()
             }
         }, LinearLayout.LayoutParams(-1, -2))
