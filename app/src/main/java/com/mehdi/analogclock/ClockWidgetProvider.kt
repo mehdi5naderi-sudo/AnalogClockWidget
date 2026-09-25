@@ -23,10 +23,13 @@ class ClockWidgetProvider : AppWidgetProvider() {
         update(context, manager, ids)
         schedule(context)
     }
+
     override fun onEnabled(context: Context) { schedule(context) }
+
     override fun onDisabled(context: Context) {
         (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent(context))
     }
+
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
@@ -35,12 +38,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 prefs.edit().putBoolean(KEY_SECONDS, !prefs.getBoolean(KEY_SECONDS, true)).apply()
                 val manager = AppWidgetManager.getInstance(context)
                 val ids = manager.getAppWidgetIds(ComponentName(context, ClockWidgetProvider::class.java))
-                update(context, manager, ids); schedule(context)
+                update(context, manager, ids)
+                schedule(context)
             }
             ACTION_TICK -> {
                 val manager = AppWidgetManager.getInstance(context)
                 val ids = manager.getAppWidgetIds(ComponentName(context, ClockWidgetProvider::class.java))
-                update(context, manager, ids); schedule(context)
+                update(context, manager, ids)
+                schedule(context)
             }
         }
     }
@@ -50,11 +55,11 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val ACTION_TOGGLE_SECONDS = "com.mehdi.analogclock.TOGGLE_SECONDS"
         private const val PREFS = "clock_widget_prefs"
         private const val KEY_SECONDS = "show_seconds"
-        private const val KEY_NUMBER_SIZE = "number_size"
-        private const val KEY_POS_12 = "pos_12"
-        private const val KEY_POS_3 = "pos_3"
-        private const val KEY_POS_6 = "pos_6"
-        private const val KEY_POS_9 = "pos_9"
+        private const val KEY_INFO_SIZE = "info_size"
+        private const val KEY_POS_SUNRISE = "pos_sunrise"
+        private const val KEY_POS_SUNSET = "pos_sunset"
+        private const val KEY_POS_DAY_LENGTH = "pos_day_length"
+        private const val KEY_POS_DELTA = "pos_delta"
         private const val LATITUDE = 35.6892
         private const val LONGITUDE = 51.3890
         private const val TIME_ZONE = "Asia/Tehran"
@@ -68,12 +73,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val bitmap = drawClock(
                 prefs.getBoolean(KEY_SECONDS, true),
-                prefs.getFloat(KEY_NUMBER_SIZE, 30f),
+                prefs.getFloat(KEY_INFO_SIZE, 26f),
                 intArrayOf(
-                    prefs.getInt(KEY_POS_12, CORNER_TOP_LEFT),
-                    prefs.getInt(KEY_POS_3, CORNER_TOP_RIGHT),
-                    prefs.getInt(KEY_POS_6, CORNER_BOTTOM_RIGHT),
-                    prefs.getInt(KEY_POS_9, CORNER_BOTTOM_LEFT)
+                    prefs.getInt(KEY_POS_SUNRISE, CORNER_TOP_LEFT),
+                    prefs.getInt(KEY_POS_SUNSET, CORNER_TOP_RIGHT),
+                    prefs.getInt(KEY_POS_DAY_LENGTH, CORNER_BOTTOM_LEFT),
+                    prefs.getInt(KEY_POS_DELTA, CORNER_BOTTOM_RIGHT)
                 )
             )
             ids.forEach { id ->
@@ -84,7 +89,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun drawClock(showSeconds: Boolean, numberSize: Float, positions: IntArray): Bitmap {
+        private fun drawClock(showSeconds: Boolean, infoSize: Float, positions: IntArray): Bitmap {
             val size = 512
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -129,35 +134,28 @@ class ClockWidgetProvider : AppWidgetProvider() {
             tomorrowCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
             val tomorrow = solarDay(tomorrowCal.get(java.util.Calendar.YEAR), tomorrowCal.get(java.util.Calendar.DAY_OF_YEAR))
 
-            paint.style = Paint.Style.FILL
-            paint.color = 0xCC111821.toInt()
-            canvas.drawRoundRect(115f, 321f, 397f, 425f, 22f, 22f, paint)
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            drawHourNumbers(canvas, center, radius)
 
-            paint.textSize = 17f
-            paint.color = 0xFFFFC857.toInt()
-            canvas.drawText("☀", 151f, 346f, paint)
-            paint.color = 0xFFF3F5F7.toInt()
-            canvas.drawText(formatTime(today.sunrise), 194f, 347f, paint)
-            paint.color = 0xFFFFC857.toInt()
-            canvas.drawText("☀", 361f, 346f, paint)
-            paint.color = 0xFFF3F5F7.toInt()
-            canvas.drawText(formatTime(today.sunset), 318f, 347f, paint)
-
-            paint.textSize = 16f
-            paint.color = 0xFF8FA0B5.toInt()
-            canvas.drawText("طول روز", center, 373f, paint)
-            paint.textSize = 23f
-            paint.color = 0xFFF3F5F7.toInt()
-            canvas.drawText(formatDuration(today.dayLengthMinutes), center, 397f, paint)
+            drawInfoItem(
+                canvas, positions[0], "طلوع", formatTime(today.sunrise),
+                0xFFFFC857.toInt(), infoSize
+            )
+            drawInfoItem(
+                canvas, positions[1], "غروب", formatTime(today.sunset),
+                0xFFFFC857.toInt(), infoSize
+            )
+            drawInfoItem(
+                canvas, positions[2], "طول روز", formatDuration(today.dayLengthMinutes),
+                0xFF8FA0B5.toInt(), infoSize
+            )
 
             val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
             val arrow = if (delta > 0) "↑" else if (delta < 0) "↓" else "—"
-            val deltaText = if (delta == 0) "فردا  بدون تغییر" else "فردا  " + arrow + " " + formatDelta(abs(delta))
-            paint.textSize = 15f
-            paint.color = if (delta > 0) 0xFF6FD08C.toInt() else if (delta < 0) 0xFFE58A8A.toInt() else 0xFF9AA6B2.toInt()
-            canvas.drawText(deltaText, center, 417f, paint)
+            val deltaText = if (delta == 0) "بدون تغییر" else arrow + " " + formatDelta(abs(delta))
+            val deltaColor = if (delta > 0) 0xFF6FD08C.toInt()
+            else if (delta < 0) 0xFFE58A8A.toInt()
+            else 0xFF9AA6B2.toInt()
+            drawInfoItem(canvas, positions[3], "فردا", deltaText, deltaColor, infoSize)
 
             drawHand(canvas, center, 150f, (hour + minute / 60f) * 30f, 18f, 0xFFF3F5F7.toInt())
             drawHand(canvas, center, 170f, (minute + second / 60f) * 6f, 12f, 0xFFD7DEE8.toInt())
@@ -168,32 +166,73 @@ class ClockWidgetProvider : AppWidgetProvider() {
             paint.color = 0xFFF3F5F7.toInt()
             canvas.drawCircle(center, center, 5f, paint)
 
-            drawCornerNumbers(canvas, numberSize, positions)
             return bitmap
         }
 
-        private fun drawCornerNumbers(canvas: Canvas, numberSize: Float, positions: IntArray) {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.color = 0xFFF3F5F7.toInt()
-            paint.textSize = numberSize.coerceIn(16f, 56f)
-            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            paint.textAlign = Paint.Align.CENTER
-            val anchors = arrayOf(
-                floatArrayOf(72f, 62f), floatArrayOf(440f, 62f),
-                floatArrayOf(440f, 458f), floatArrayOf(72f, 458f)
-            )
-            val baselineOffset = paint.textSize * 0.34f
-            arrayOf("12", "3", "6", "9").forEachIndexed { index, label ->
-                val a = anchors[positions[index].coerceIn(0, 3)]
-                canvas.drawText(label, a[0], a[1] + baselineOffset, paint)
+        private fun drawHourNumbers(canvas: Canvas, center: Float, radius: Float) {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFF3F5F7.toInt()
+                textSize = 30f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
             }
+            val r = radius - 58f
+            val positions = arrayOf(
+                0.0 to "12",
+                Math.PI / 2 to "3",
+                Math.PI to "6",
+                3 * Math.PI / 2 to "9"
+            )
+            positions.forEach { (angle, label) ->
+                val x = center + cos(angle).toFloat() * r
+                val y = center + sin(angle).toFloat() * r + paint.textSize * 0.34f
+                canvas.drawText(label, x, y, paint)
+            }
+        }
+
+        private fun drawInfoItem(
+            canvas: Canvas,
+            position: Int,
+            title: String,
+            value: String,
+            valueColor: Int,
+            size: Float
+        ) {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val anchors = arrayOf(
+                floatArrayOf(78f, 52f),
+                floatArrayOf(434f, 52f),
+                floatArrayOf(434f, 478f),
+                floatArrayOf(78f, 478f)
+            )
+            val a = anchors[position.coerceIn(0, 3)]
+            val valueSize = size.coerceIn(16f, 42f)
+            val titleSize = (valueSize * 0.62f).coerceIn(11f, 25f)
+
+            paint.textSize = titleSize
+            paint.color = 0xFF9AA6B2.toInt()
+            canvas.drawText(title, a[0], a[1] - valueSize * 0.12f, paint)
+
+            paint.textSize = valueSize
+            paint.color = valueColor
+            canvas.drawText(value, a[0], a[1] + valueSize * 0.95f, paint)
         }
 
         private fun drawHand(canvas: Canvas, center: Float, length: Float, degrees: Float, width: Float, color: Int) {
             val angle = Math.toRadians(degrees - 90.0)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.color = color; paint.strokeWidth = width; paint.strokeCap = Paint.Cap.ROUND
-            canvas.drawLine(center, center, center + cos(angle).toFloat() * length, center + sin(angle).toFloat() * length, paint)
+            paint.color = color
+            paint.strokeWidth = width
+            paint.strokeCap = Paint.Cap.ROUND
+            canvas.drawLine(
+                center, center,
+                center + cos(angle).toFloat() * length,
+                center + sin(angle).toFloat() * length,
+                paint
+            )
         }
 
         private data class SolarDay(val sunrise: Int, val sunset: Int, val dayLengthMinutes: Int)
@@ -228,27 +267,36 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
         private fun formatTime(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
         private fun formatDuration(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
+
         private fun formatDelta(minutes: Int): String =
             if (minutes >= 60) (minutes / 60).toString() + "س " + "%02d".format(minutes % 60) + "د"
             else minutes.toString() + " دقیقه"
 
         private fun schedule(context: Context) {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val showSeconds = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SECONDS, true)
+            val showSeconds = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SECONDS, true)
             alarm.cancel(pendingIntent(context))
             val now = System.currentTimeMillis()
             val next = if (showSeconds) now + 1000L else now - (now % 60000L) + 60000L
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M)
                 alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pendingIntent(context))
-            else alarm.setExact(AlarmManager.RTC, next, pendingIntent(context))
+            else
+                alarm.setExact(AlarmManager.RTC, next, pendingIntent(context))
         }
 
         private fun pendingIntent(context: Context): PendingIntent =
-            PendingIntent.getBroadcast(context, 1001, Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TICK),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getBroadcast(
+                context, 1001,
+                Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TICK),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
         private fun togglePendingIntent(context: Context): PendingIntent =
-            PendingIntent.getBroadcast(context, 1002, Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TOGGLE_SECONDS),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getBroadcast(
+                context, 1002,
+                Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_TOGGLE_SECONDS),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
     }
 }
