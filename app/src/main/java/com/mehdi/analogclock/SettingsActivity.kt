@@ -97,12 +97,12 @@ class SettingsActivity : Activity() {
                     .putInt("pos_9", spinners[3].selectedItemPosition)
                     .putFloat("number_size", (seek.progress + 16).toFloat())
                     .apply()
-                val manager = AppWidgetManager.getInstance(this)
+                val manager = AppWidgetManager.getInstance(this@SettingsActivity)
                 val ids = manager.getAppWidgetIds(
-                    android.content.ComponentName(this, ClockWidgetProvider::class.java)
+                    android.content.ComponentName(this@SettingsActivity, ClockWidgetProvider::class.java)
                 )
                 ClockWidgetProvider.update(this, manager, ids)
-                Toast.makeText(this, "تنظیمات ذخیره شد", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, "تنظیمات ذخیره شد", Toast.LENGTH_SHORT).show()
             }
         }, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
