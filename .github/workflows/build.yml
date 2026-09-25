@@ -44,86 +44,22 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle.zip
 
-      - name: Validate configured signing secret
-        id: secret_signing
+      - name: Build debug APK
+        run: ./gradle-8.10.2/bin/gradle --no-daemon assembleDebug
+
+      - name: Build debug APK
         env:
-          KS: ${{ secrets.RELEASE_KEYSTORE_B64 }}
-          SP: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          AL: ${{ secrets.RELEASE_KEY_ALIAS }}
+          run: ./gradle-8.10.2/bin/gradle --no-daemon assembleDebug
+
+      - name: Verify APK
         run: |
           set -e
-          if [ -z "$KS" ] || [ -z "$SP" ] || [ -z "$AL" ]; then
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          printf '%s' "$KS" | base64 --decode > release.keystore 2>/dev/null || {
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          }
-          if keytool -list -keystore release.keystore -storepass "$SP" -alias "$AL" >/dev/null 2>&1; then
-            echo "valid=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Use configured release keystore
-        if: steps.secret_signing.outputs.valid == 'true'
-        env:
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: |
-          set -e
-          printf '%s\n' "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
-          if [ -n "$RELEASE_KEY_PASSWORD" ]; then
-            printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
-          else
-            printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
-          fi
-          echo "Configured repository signing keystore is valid."
-
-      - name: Recover canonical signing keystore
-        if: steps.secret_signing.outputs.valid != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          artifact-ids: 9925690541
-          path: canonical-signing
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: 33843516302
-
-      - name: Prepare canonical signing keystore
-        if: steps.secret_signing.outputs.valid != 'true'
-        env:
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-        run: |
-          set -e
-          test -f canonical-signing/release.keystore
-          cp canonical-signing/release.keystore release.keystore
-          if ! keytool -list -keystore release.keystore -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" >/dev/null 2>&1; then
-            echo "ERROR: Canonical signing keystore could not be opened with the configured store password/alias."
-            exit 1
-          fi
-          printf '%s\n' "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
-          printf '%s\n' "RELEASE_KEY_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "Canonical signing keystore recovered and validated."
-
-      - name: Build signed release APK
-        env:
-          RELEASE_KEYSTORE_PATH: release.keystore
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-        run: ./gradle-8.10.2/bin/gradle --no-daemon assembleRelease
-
-      - name: Verify APK signature
-        run: |
-          set -e
-          APK=app/build/outputs/apk/release/app-release.apk
+          APK=app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
           apksigner verify --verbose "$APK"
-          echo "APK signature verification passed."
 
-      - name: Upload signed APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AnalogClockWidget-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: AnalogClockWidget-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
