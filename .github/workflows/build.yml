@@ -47,10 +47,6 @@ jobs:
       - name: Build debug APK
         run: ./gradle-8.10.2/bin/gradle --no-daemon assembleDebug
 
-      - name: Build debug APK
-        env:
-          run: ./gradle-8.10.2/bin/gradle --no-daemon assembleDebug
-
       - name: Verify APK
         run: |
           set -e
