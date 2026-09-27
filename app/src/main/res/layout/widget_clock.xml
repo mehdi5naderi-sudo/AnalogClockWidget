@@ -4,12 +4,10 @@
     android:layout_height="match_parent"
     android:background="#10141C"
     android:padding="4dp">
-
     <ImageView
         android:id="@+id/clock_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="fitCenter"
-        android:contentDescription="Analog clock" />
-
+        android:contentDescription="Digital clock and four information values" />
 </FrameLayout>
