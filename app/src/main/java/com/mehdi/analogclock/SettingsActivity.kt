@@ -2,6 +2,7 @@ package com.mehdi.analogclock
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -11,86 +12,110 @@ import android.widget.TextView
 import android.widget.Toast
 
 class SettingsActivity : Activity() {
-    private val prefs by lazy { getSharedPreferences("clock_widget_prefs", MODE_PRIVATE) }
+
+    private val prefs by lazy {
+        getSharedPreferences("clock_widget_prefs", MODE_PRIVATE)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 28, 28, 28)
-            setBackgroundColor(0xFF10141C.toInt())
+            setPadding(32, 36, 32, 36)
+            setBackgroundColor(0xFF0B0F17.toInt())
         }
 
+        // Title
         root.addView(TextView(this).apply {
-            text = "تنظیمات ویجت ساعت"
-            textSize = 22f
+            text = "تنظیمات ویجت"
+            textSize = 24f
             setTextColor(0xFFF3F5F7.toInt())
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 18)
+            setPadding(0, 0, 0, 8)
         })
 
+        // Description
         root.addView(TextView(this).apply {
-            text = "ساعت دیجیتال بالا و چهار مقدار پایین؛ اندازه هر بخش جداگانه قابل تنظیم است."
-            textSize = 15f
-            setTextColor(0xFF9AA6B2.toInt())
-            setPadding(0, 0, 0, 12)
+            text = "اندازه هر بخش را جداگانه تنظیم کنید. تغییرات بلافاصله روی ویجت اعمال می‌شود."
+            textSize = 14f
+            setTextColor(0xFF8B9AAB.toInt())
+            setPadding(0, 0, 0, 20)
         })
 
-        fun control(label: String, key: String, min: Int, max: Int, default: Float): SeekBar {
+        data class Control(val label: String, val key: String, val min: Int, val max: Int, val default: Float)
+
+        val controls = listOf(
+            Control("ساعت دیجیتال", "digital_clock_size", 48, 110, 78f),
+            Control("عنوان‌ها", "info_title_size", 12, 22, 15f),
+            Control("مقدار طلوع", "info_value1_size", 18, 36, 26f),
+            Control("مقدار غروب", "info_value2_size", 18, 36, 26f),
+            Control("مقدار طول روز", "info_value3_size", 18, 36, 26f),
+            Control("مقدار فردا", "info_value4_size", 18, 36, 24f)
+        )
+
+        val bars = mutableListOf<SeekBar>()
+
+        controls.forEach { c ->
             root.addView(TextView(this).apply {
-                text = label
-                textSize = 17f
+                text = c.label
+                textSize = 15f
                 setTextColor(0xFFF3F5F7.toInt())
-                setPadding(0, 8, 0, 2)
+                setPadding(0, 14, 0, 4)
             })
-            val value = TextView(this).apply {
-                textSize = 14f
+
+            val valueLabel = TextView(this).apply {
+                textSize = 13f
                 setTextColor(0xFFFFC857.toInt())
                 gravity = Gravity.CENTER
             }
-            root.addView(value)
+            root.addView(valueLabel)
+
             val bar = SeekBar(this).apply {
-                this.max = max - min
-                progress = (prefs.getFloat(key, default) - min).toInt().coerceIn(0, this.max)
+                max = c.max - c.min
+                progress = (prefs.getFloat(c.key, c.default) - c.min)
+                    .toInt()
+                    .coerceIn(0, max)
             }
-            fun refresh() { value.text = (bar.progress + min).toString() + " sp" }
+
+            fun refresh() {
+                valueLabel.text = "${bar.progress + c.min} sp"
+            }
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { refresh() }
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) = refresh()
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
             refresh()
             root.addView(bar)
-            return bar
+            bars.add(bar)
         }
 
-        val clock = control("اندازه ساعت دیجیتال", "digital_clock_size", 42, 1300, 76f)
-        val title = control("اندازه عنوان‌ها", "info_title_size", 11, 1124, 18f)
-        val v1 = control("اندازه مقدار طلوع", "info_value1_size", 16, 1198, 30f)
-        val v2 = control("اندازه مقدار غروب", "info_value2_size", 16, 1198, 30f)
-        val v3 = control("اندازه مقدار طول روز", "info_value3_size", 16, 1198, 30f)
-        val v4 = control("اندازه مقدار فردا", "info_value4_size", 16, 1198, 27f)
-
+        // Save button
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
+            setTextColor(0xFF0B0F17.toInt())
+            setBackgroundColor(0xFFFFC857.toInt())
             setOnClickListener {
-                prefs.edit()
-                    .putFloat("digital_clock_size", (clock.progress + 42).toFloat())
-                    .putFloat("info_title_size", (title.progress + 11).toFloat())
-                    .putFloat("info_value1_size", (v1.progress + 16).toFloat())
-                    .putFloat("info_value2_size", (v2.progress + 16).toFloat())
-                    .putFloat("info_value3_size", (v3.progress + 16).toFloat())
-                    .putFloat("info_value4_size", (v4.progress + 16).toFloat())
-                    .apply()
+                val editor = prefs.edit()
+                controls.forEachIndexed { i, c ->
+                    editor.putFloat(c.key, (bars[i].progress + c.min).toFloat())
+                }
+                editor.apply()
 
                 val manager = AppWidgetManager.getInstance(this@SettingsActivity)
                 val ids = manager.getAppWidgetIds(
-                    android.content.ComponentName(this@SettingsActivity, ClockWidgetProvider::class.java)
+                    ComponentName(this@SettingsActivity, ClockWidgetProvider::class.java)
                 )
                 ClockWidgetProvider.update(this@SettingsActivity, manager, ids)
                 Toast.makeText(this@SettingsActivity, "تنظیمات ذخیره شد", Toast.LENGTH_SHORT).show()
             }
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 16 })
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = 28
+        })
 
         setContentView(root)
     }

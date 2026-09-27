@@ -1,25 +1,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:theme="@style/AppTheme"
-        android:label="Analog Clock"
+        android:label="ساعت خورشیدی"
         android:icon="@drawable/ic_clock_settings">
+
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
-            android:label="تنظیمات ساعت">
+            android:label="تنظیمات ویجت">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <receiver
             android:name=".ClockWidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="ساعت خورشیدی">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/clock_widget_info" />
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/clock_widget_info" />
         </receiver>
+
     </application>
 </manifest>
