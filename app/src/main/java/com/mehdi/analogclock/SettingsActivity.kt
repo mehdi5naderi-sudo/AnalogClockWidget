@@ -64,12 +64,12 @@ class SettingsActivity : Activity() {
             return bar
         }
 
-        val clock = control("اندازه ساعت دیجیتال", "digital_clock_size", 42, 160, 76f)
-        val title = control("اندازه عنوان‌ها", "info_title_size", 11, 54, 18f)
-        val v1 = control("اندازه مقدار طلوع", "info_value1_size", 16, 68, 30f)
-        val v2 = control("اندازه مقدار غروب", "info_value2_size", 16, 68, 30f)
-        val v3 = control("اندازه مقدار طول روز", "info_value3_size", 16, 68, 30f)
-        val v4 = control("اندازه مقدار فردا", "info_value4_size", 16, 68, 27f)
+        val clock = control("اندازه ساعت دیجیتال", "digital_clock_size", 42, 200, 76f)
+        val title = control("اندازه عنوان‌ها", "info_title_size", 11, 74, 18f)
+        val v1 = control("اندازه مقدار طلوع", "info_value1_size", 16, 98, 30f)
+        val v2 = control("اندازه مقدار غروب", "info_value2_size", 16, 98, 30f)
+        val v3 = control("اندازه مقدار طول روز", "info_value3_size", 16, 98, 30f)
+        val v4 = control("اندازه مقدار فردا", "info_value4_size", 16, 98, 27f)
 
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
