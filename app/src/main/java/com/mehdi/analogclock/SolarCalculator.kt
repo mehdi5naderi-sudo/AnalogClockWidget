@@ -8,6 +8,9 @@ import kotlin.math.sin
 /**
  * Approximate solar sunrise/sunset calculator (NOAA-style equations).
  * Location is fixed to Tehran by default.
+ *
+ * Results are cached per calendar day — the four daily indicators only
+ * change once a day, so we avoid recomputing on every minute tick.
  */
 object SolarCalculator {
 
@@ -21,10 +24,21 @@ object SolarCalculator {
         val dayLengthMinutes: Int
     )
 
+    // Cache: key = year * 1000 + dayOfYear
+    private val cache = HashMap<Int, SolarDay>(4)
+
     fun solarDay(year: Int, dayOfYear: Int): SolarDay {
+        val key = year * 1000 + dayOfYear
+        cache[key]?.let { return it }
+
         val sunrise = solarEventMinutes(year, dayOfYear, sunrise = true)
         val sunset = solarEventMinutes(year, dayOfYear, sunrise = false)
-        return SolarDay(sunrise, sunset, sunset - sunrise)
+        val day = SolarDay(sunrise, sunset, sunset - sunrise)
+
+        // Keep cache small (today + tomorrow is enough)
+        if (cache.size > 8) cache.clear()
+        cache[key] = day
+        return day
     }
 
     private fun solarEventMinutes(year: Int, dayOfYear: Int, sunrise: Boolean): Int {
