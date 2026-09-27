@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -55,8 +55,21 @@ jobs:
           test -f "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AnalogClockWidget-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AnalogClockWidget Build #${{ github.run_number }}
+          body: |
+            Automatic APK build from GitHub Actions.
+            Build: #${{ github.run_number }}
+            Commit: ${{ github.sha }}
+            Created: ${{ github.event.head_commit.timestamp }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: false
