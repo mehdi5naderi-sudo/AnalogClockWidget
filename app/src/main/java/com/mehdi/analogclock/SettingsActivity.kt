@@ -26,7 +26,6 @@ class SettingsActivity : Activity() {
             setBackgroundColor(0xFF0B0F17.toInt())
         }
 
-        // Title
         root.addView(TextView(this).apply {
             text = "تنظیمات ویجت"
             textSize = 24f
@@ -35,9 +34,8 @@ class SettingsActivity : Activity() {
             setPadding(0, 0, 0, 8)
         })
 
-        // Description
         root.addView(TextView(this).apply {
-            text = "اندازه هر بخش را جداگانه تنظیم کنید. تغییرات بلافاصله روی ویجت اعمال می‌شود."
+            text = "اندازه ساعت و مقادیر را تنظیم کنید."
             textSize = 14f
             setTextColor(0xFF8B9AAB.toInt())
             setPadding(0, 0, 0, 20)
@@ -47,11 +45,10 @@ class SettingsActivity : Activity() {
 
         val controls = listOf(
             Control("ساعت دیجیتال", "digital_clock_size", 48, 110, 78f),
-            Control("عنوان‌ها", "info_title_size", 12, 22, 15f),
-            Control("مقدار طلوع", "info_value1_size", 18, 36, 26f),
-            Control("مقدار غروب", "info_value2_size", 18, 36, 26f),
-            Control("مقدار طول روز", "info_value3_size", 18, 36, 26f),
-            Control("مقدار فردا", "info_value4_size", 18, 36, 24f)
+            Control("طلوع", "info_value1_size", 18, 38, 28f),
+            Control("غروب", "info_value2_size", 18, 38, 28f),
+            Control("طول روز", "info_value3_size", 18, 38, 28f),
+            Control("فردا", "info_value4_size", 18, 38, 26f)
         )
 
         val bars = mutableListOf<SeekBar>()
@@ -91,7 +88,6 @@ class SettingsActivity : Activity() {
             bars.add(bar)
         }
 
-        // Save button
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
             setTextColor(0xFF0B0F17.toInt())
