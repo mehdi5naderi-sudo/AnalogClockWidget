@@ -54,12 +54,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
         private const val ACTION_TOGGLE_SECONDS = "com.mehdi.analogclock.TOGGLE_SECONDS"
         private const val PREFS = "clock_widget_prefs"
-        private const val KEY_SECONDS = "show_seconds"
-        private const val KEY_INFO_SIZE = "info_size"
-        private const val KEY_POS_SUNRISE = "pos_sunrise"
-        private const val KEY_POS_SUNSET = "pos_sunset"
-        private const val KEY_POS_DAY_LENGTH = "pos_day_length"
-        private const val KEY_POS_DELTA = "pos_delta"
+        private const val KEY_CLOCK_SIZE = "digital_clock_size"
+        private const val KEY_TITLE_SIZE = "info_title_size"
+        private const val KEY_VALUE1_SIZE = "info_value1_size"
+        private const val KEY_VALUE2_SIZE = "info_value2_size"
+        private const val KEY_VALUE3_SIZE = "info_value3_size"
+        private const val KEY_VALUE4_SIZE = "info_value4_size"
         private const val LATITUDE = 35.6892
         private const val LONGITUDE = 51.3890
         private const val TIME_ZONE = "Asia/Tehran"
@@ -70,158 +70,67 @@ class ClockWidgetProvider : AppWidgetProvider() {
         const val CORNER_BOTTOM_LEFT = 3
 
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val bitmap = drawClock(
-                prefs.getBoolean(KEY_SECONDS, true),
-                prefs.getFloat(KEY_INFO_SIZE, 26f),
-                intArrayOf(
-                    prefs.getInt(KEY_POS_SUNRISE, CORNER_TOP_LEFT),
-                    prefs.getInt(KEY_POS_SUNSET, CORNER_TOP_RIGHT),
-                    prefs.getInt(KEY_POS_DAY_LENGTH, CORNER_BOTTOM_LEFT),
-                    prefs.getInt(KEY_POS_DELTA, CORNER_BOTTOM_RIGHT)
+            val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val bitmap = drawWidget(
+                p.getFloat(KEY_CLOCK_SIZE, 76f),
+                p.getFloat(KEY_TITLE_SIZE, 18f),
+                floatArrayOf(
+                    p.getFloat(KEY_VALUE1_SIZE, 30f),
+                    p.getFloat(KEY_VALUE2_SIZE, 30f),
+                    p.getFloat(KEY_VALUE3_SIZE, 30f),
+                    p.getFloat(KEY_VALUE4_SIZE, 27f)
                 )
             )
             ids.forEach { id ->
                 val views = RemoteViews(context.packageName, R.layout.widget_clock)
                 views.setImageViewBitmap(R.id.clock_image, bitmap)
-                views.setOnClickPendingIntent(R.id.clock_image, togglePendingIntent(context))
                 manager.updateAppWidget(id, views)
             }
         }
 
-        private fun drawClock(showSeconds: Boolean, infoSize: Float, positions: IntArray): Bitmap {
-            val size = 512
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        private fun drawWidget(clockSize: Float, titleSize: Float, valueSizes: FloatArray): Bitmap {
+            val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            val center = size / 2f
-            val radius = 184f
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-            paint.style = Paint.Style.FILL
-            paint.color = 0xFF10141C.toInt()
-            canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
-            paint.color = 0xFF10141C.toInt()
-            canvas.drawCircle(center, center, radius + 12f, paint)
-            paint.color = 0xFF18202B.toInt()
-            canvas.drawCircle(center, center, radius, paint)
-
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 5f
-            paint.color = 0xFF3B4655.toInt()
-            canvas.drawCircle(center, center, radius, paint)
-
-            paint.style = Paint.Style.FILL
-            paint.strokeCap = Paint.Cap.ROUND
-            for (i in 0 until 60) {
-                val angle = Math.toRadians(i * 6.0)
-                val outer = radius - 12f
-                val inner = if (i % 5 == 0) radius - 34f else radius - 23f
-                paint.strokeWidth = if (i % 5 == 0) 6f else 2.5f
-                paint.color = if (i % 5 == 0) 0xFFE8EDF3.toInt() else 0xFF718096.toInt()
-                canvas.drawLine(
-                    center + cos(angle).toFloat() * inner, center + sin(angle).toFloat() * inner,
-                    center + cos(angle).toFloat() * outer, center + sin(angle).toFloat() * outer, paint
-                )
-            }
-
-            val cal = java.util.Calendar.getInstance()
-            val hour = cal.get(java.util.Calendar.HOUR)
-            val minute = cal.get(java.util.Calendar.MINUTE)
-            val second = cal.get(java.util.Calendar.SECOND)
-            val millis = cal.get(java.util.Calendar.MILLISECOND)
+            val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF10141C.toInt() }
+            canvas.drawRect(0f, 0f, 512f, 512f, bg)
+            val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(TIME_ZONE))
             val today = solarDay(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.DAY_OF_YEAR))
             val tomorrowCal = cal.clone() as java.util.Calendar
             tomorrowCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
             val tomorrow = solarDay(tomorrowCal.get(java.util.Calendar.YEAR), tomorrowCal.get(java.util.Calendar.DAY_OF_YEAR))
-
-            drawHourNumbers(canvas, center, radius)
-
-            drawInfoItem(
-                canvas, positions[0], "طلوع", formatTime(today.sunrise),
-                0xFFFFC857.toInt(), infoSize
-            )
-            drawInfoItem(
-                canvas, positions[1], "غروب", formatTime(today.sunset),
-                0xFFFFC857.toInt(), infoSize
-            )
-            drawInfoItem(
-                canvas, positions[2], "طول روز", formatDuration(today.dayLengthMinutes),
-                0xFF8FA0B5.toInt(), infoSize
-            )
-
+            val clockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFF3F5F7.toInt()
+                textSize = clockSize.coerceIn(42f, 130f)
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("%02d:%02d".format(cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE)), 256f, 142f, clockPaint)
             val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
-            val arrow = if (delta > 0) "↑" else if (delta < 0) "↓" else "—"
-            val deltaText = if (delta == 0) "بدون تغییر" else arrow + " " + formatDelta(abs(delta))
-            val deltaColor = if (delta > 0) 0xFF6FD08C.toInt()
-            else if (delta < 0) 0xFFE58A8A.toInt()
-            else 0xFF9AA6B2.toInt()
-            drawInfoItem(canvas, positions[3], "فردا", deltaText, deltaColor, infoSize)
-
-            drawHand(canvas, center, 150f, (hour + minute / 60f) * 30f, 18f, 0xFFF3F5F7.toInt())
-            drawHand(canvas, center, 170f, (minute + second / 60f) * 6f, 12f, 0xFFD7DEE8.toInt())
-            if (showSeconds) drawHand(canvas, center, 178f, (second + millis / 1000f) * 6f, 5f, 0xFFE05B5B.toInt())
-
-            paint.color = 0xFFE05B5B.toInt()
-            canvas.drawCircle(center, center, 13f, paint)
-            paint.color = 0xFFF3F5F7.toInt()
-            canvas.drawCircle(center, center, 5f, paint)
-
+            val deltaText = if (delta > 0) "↑ " + formatDelta(delta) else if (delta < 0) "↓ " + formatDelta(-delta) else "بدون تغییر"
+            val deltaColor = if (delta > 0) 0xFF6FD08C.toInt() else if (delta < 0) 0xFFE58A8A.toInt() else 0xFF9AA6B2.toInt()
+            drawInfoCell(canvas, 128f, 278f, "طلوع", formatTime(today.sunrise), 0xFFFFC857.toInt(), titleSize, valueSizes[0])
+            drawInfoCell(canvas, 384f, 278f, "غروب", formatTime(today.sunset), 0xFFFFC857.toInt(), titleSize, valueSizes[1])
+            drawInfoCell(canvas, 128f, 430f, "طول روز", formatDuration(today.dayLengthMinutes), 0xFF8FA0B5.toInt(), titleSize, valueSizes[2])
+            drawInfoCell(canvas, 384f, 430f, "فردا", deltaText, deltaColor, titleSize, valueSizes[3])
             return bitmap
         }
 
-        private fun drawHourNumbers(canvas: Canvas, center: Float, radius: Float) {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFFF3F5F7.toInt()
-                textSize = 30f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            val r = radius - 58f
-            val positions = arrayOf(
-                0.0 to "12",
-                Math.PI / 2 to "3",
-                Math.PI to "6",
-                3 * Math.PI / 2 to "9"
-            )
-            positions.forEach { (angle, label) ->
-                val x = center + cos(angle).toFloat() * r
-                val y = center + sin(angle).toFloat() * r + paint.textSize * 0.34f
-                canvas.drawText(label, x, y, paint)
-            }
-        }
-
-        private fun drawInfoItem(
-            canvas: Canvas,
-            position: Int,
-            title: String,
-            value: String,
-            valueColor: Int,
-            size: Float
-        ) {
+        private fun drawInfoCell(canvas: Canvas, x: Float, y: Float, title: String, value: String, valueColor: Int, titleSize: Float, valueSize: Float) {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
-            val anchors = arrayOf(
-                floatArrayOf(78f, 52f),
-                floatArrayOf(434f, 52f),
-                floatArrayOf(434f, 478f),
-                floatArrayOf(78f, 478f)
-            )
-            val a = anchors[position.coerceIn(0, 3)]
-            val valueSize = size.coerceIn(16f, 42f)
-            val titleSize = (valueSize * 0.62f).coerceIn(11f, 25f)
-
-            paint.textSize = titleSize
+            val ts = titleSize.coerceIn(11f, 34f)
+            val vs = valueSize.coerceIn(16f, 48f)
+            paint.textSize = ts
             paint.color = 0xFF9AA6B2.toInt()
-            canvas.drawText(title, a[0], a[1] - valueSize * 0.12f, paint)
-
-            paint.textSize = valueSize
+            canvas.drawText(title, x, y, paint)
+            paint.textSize = vs
             paint.color = valueColor
-            canvas.drawText(value, a[0], a[1] + valueSize * 0.95f, paint)
+            canvas.drawText(value, x, y + vs * 0.95f, paint)
         }
 
-        private fun drawHand(canvas: Canvas, center: Float, length: Float, degrees: Float, width: Float, color: Int) {
+        private data class SolarDay(canvas: Canvas, center: Float, length: Float, degrees: Float, width: Float, color: Int) {
             val angle = Math.toRadians(degrees - 90.0)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             paint.color = color
@@ -269,7 +178,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private fun formatDuration(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
 
         private fun formatDelta(minutes: Int): String =
-            if (minutes >= 60) (minutes / 60).toString() + "س " + "%02d".format(minutes % 60) + "د"
+            if (minutes >= 60) minutes.div(60).toString() + "س " + "%02d".format(minutes % 60) + "د"
             else minutes.toString() + " دقیقه"
 
         private fun schedule(context: Context) {
