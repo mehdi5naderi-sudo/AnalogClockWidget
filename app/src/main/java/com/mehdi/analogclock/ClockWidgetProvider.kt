@@ -72,12 +72,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val bitmap = drawWidget(
-                clockSize = p.getFloat(KEY_CLOCK_SIZE, 72f),
+                clockSize = p.getFloat(KEY_CLOCK_SIZE, 96f),
                 valueSizes = floatArrayOf(
-                    p.getFloat(KEY_VALUE1_SIZE, 26f),
-                    p.getFloat(KEY_VALUE2_SIZE, 26f),
-                    p.getFloat(KEY_VALUE3_SIZE, 26f),
-                    p.getFloat(KEY_VALUE4_SIZE, 24f)
+                    p.getFloat(KEY_VALUE1_SIZE, 34f),
+                    p.getFloat(KEY_VALUE2_SIZE, 34f),
+                    p.getFloat(KEY_VALUE3_SIZE, 34f),
+                    p.getFloat(KEY_VALUE4_SIZE, 30f)
                 )
             )
             ids.forEach { id ->
@@ -99,13 +99,13 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
             val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = LinearGradient(
-                    256f, 0f, 256f, 140f,
+                    256f, 0f, 256f, 130f,
                     intArrayOf(0x181C2A3A, 0x000B0F17),
                     null,
                     Shader.TileMode.CLAMP
                 )
             }
-            canvas.drawRect(0f, 0f, size.toFloat(), 150f, glowPaint)
+            canvas.drawRect(0f, 0f, size.toFloat(), 140f, glowPaint)
 
             val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
             val today = SolarCalculator.solarDay(
@@ -124,28 +124,21 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val minute = cal.get(Calendar.MINUTE)
             val currentMinutes = hour * 60 + minute
 
-            // Compact time section (top ~30%)
+            // Large digital time — use space aggressively
             val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_TEXT
-                textSize = clockSize.coerceIn(44f, 96f)
+                textSize = clockSize.coerceIn(64f, 120f)
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
             }
-            canvas.drawText("%02d:%02d".format(hour, minute), 256f, 78f, timePaint)
+            canvas.drawText("%02d:%02d".format(hour, minute), 256f, 88f, timePaint)
 
-            val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_MUTED
-                textSize = 14f
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText("تهران", 256f, 100f, subPaint)
-
-            // Progress bar
-            val progressY = 116f
-            val barLeft = 56f
-            val barRight = 456f
-            val barHeight = 5f
+            // Progress bar under time (thin, full width)
+            val progressY = 108f
+            val barLeft = 28f
+            val barRight = 484f
+            val barHeight = 6f
 
             canvas.drawRoundRect(
                 RectF(barLeft, progressY, barRight, progressY + barHeight),
@@ -174,7 +167,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 )
             }
 
-            // 2×2 cards — fill remaining space
+            // 2×2 cards — maximum space, minimal gaps
             val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
             val deltaText = when {
                 delta > 0 -> "↑ " + SolarCalculator.formatDelta(delta)
@@ -187,21 +180,25 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 else -> COLOR_MUTED
             }
 
-            val pad = 20f
-            val gap = 12f
+            val pad = 12f
+            val gap = 10f
             val cardW = (512f - pad * 2 - gap) / 2f
-            val cardH = (512f - 140f - pad - gap) / 2f   // from y=140 to bottom
+            val cardTop = 128f
+            val cardH = (512f - cardTop - pad - gap) / 2f
             val startX = pad
-            val startY = 140f
 
-            drawCard(canvas, startX, startY, cardW, cardH,
-                SolarCalculator.formatTime(today.sunrise), COLOR_GOLD, valueSizes[0], IconType.SUNRISE)
-            drawCard(canvas, startX + cardW + gap, startY, cardW, cardH,
+            // RTL: sunset LEFT, sunrise RIGHT
+            // Top row: غروب (left) | طلوع (right)
+            drawCard(canvas, startX, cardTop, cardW, cardH,
                 SolarCalculator.formatTime(today.sunset), COLOR_GOLD, valueSizes[1], IconType.SUNSET)
-            drawCard(canvas, startX, startY + cardH + gap, cardW, cardH,
-                SolarCalculator.formatDuration(today.dayLengthMinutes), COLOR_TEXT, valueSizes[2], IconType.DURATION)
-            drawCard(canvas, startX + cardW + gap, startY + cardH + gap, cardW, cardH,
+            drawCard(canvas, startX + cardW + gap, cardTop, cardW, cardH,
+                SolarCalculator.formatTime(today.sunrise), COLOR_GOLD, valueSizes[0], IconType.SUNRISE)
+
+            // Bottom row: فردا (left) | طول روز (right) — keep logical pairing
+            drawCard(canvas, startX, cardTop + cardH + gap, cardW, cardH,
                 deltaText, deltaColor, valueSizes[3], if (delta >= 0) IconType.UP else IconType.DOWN)
+            drawCard(canvas, startX + cardW + gap, cardTop + cardH + gap, cardW, cardH,
+                SolarCalculator.formatDuration(today.dayLengthMinutes), COLOR_TEXT, valueSizes[2], IconType.DURATION)
 
             return bitmap
         }
@@ -221,23 +218,23 @@ class ClockWidgetProvider : AppWidgetProvider() {
         ) {
             val rect = RectF(x, y, x + w, y + h)
 
-            canvas.drawRoundRect(rect, 18f, 18f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            canvas.drawRoundRect(rect, 16f, 16f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_CARD
                 style = Paint.Style.FILL
             })
-            canvas.drawRoundRect(rect, 18f, 18f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            canvas.drawRoundRect(rect, 16f, 16f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_CARD_STROKE
                 style = Paint.Style.STROKE
                 strokeWidth = 1.5f
             })
 
-            // Icon upper third
-            drawIcon(canvas, x + w / 2f, y + h * 0.32f, iconType)
+            // Icon — upper area, slightly larger
+            drawIcon(canvas, x + w / 2f, y + h * 0.30f, iconType)
 
-            // Value lower third
+            // Value — large, lower area
             val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = valueColor
-                textSize = valueSize.coerceIn(16f, 34f)
+                textSize = valueSize.coerceIn(22f, 44f)
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
@@ -247,7 +244,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private fun drawIcon(canvas: Canvas, cx: Float, cy: Float, type: IconType) {
             val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = 2.4f
+                strokeWidth = 2.8f
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
             }
@@ -255,35 +252,35 @@ class ClockWidgetProvider : AppWidgetProvider() {
             when (type) {
                 IconType.SUNRISE -> {
                     p.color = COLOR_GOLD
-                    canvas.drawCircle(cx, cy + 5f, 8f, p)
-                    canvas.drawLine(cx, cy - 11f, cx, cy - 4f, p)
-                    canvas.drawLine(cx - 9f, cy - 7f, cx - 4.5f, cy - 2f, p)
-                    canvas.drawLine(cx + 9f, cy - 7f, cx + 4.5f, cy - 2f, p)
-                    p.strokeWidth = 2.2f
-                    canvas.drawLine(cx - 14f, cy + 14f, cx + 14f, cy + 14f, p)
+                    canvas.drawCircle(cx, cy + 6f, 10f, p)
+                    canvas.drawLine(cx, cy - 12f, cx, cy - 3f, p)
+                    canvas.drawLine(cx - 11f, cy - 8f, cx - 5f, cy - 2f, p)
+                    canvas.drawLine(cx + 11f, cy - 8f, cx + 5f, cy - 2f, p)
+                    p.strokeWidth = 2.6f
+                    canvas.drawLine(cx - 16f, cy + 16f, cx + 16f, cy + 16f, p)
                 }
                 IconType.SUNSET -> {
                     p.color = COLOR_GOLD
-                    canvas.drawCircle(cx, cy - 2f, 8f, p)
-                    canvas.drawLine(cx, cy + 12f, cx, cy + 5f, p)
-                    canvas.drawLine(cx - 9f, cy + 8f, cx - 4.5f, cy + 3f, p)
-                    canvas.drawLine(cx + 9f, cy + 8f, cx + 4.5f, cy + 3f, p)
-                    p.strokeWidth = 2.2f
-                    canvas.drawLine(cx - 14f, cy + 14f, cx + 14f, cy + 14f, p)
+                    canvas.drawCircle(cx, cy - 2f, 10f, p)
+                    canvas.drawLine(cx, cy + 14f, cx, cy + 5f, p)
+                    canvas.drawLine(cx - 11f, cy + 10f, cx - 5f, cy + 4f, p)
+                    canvas.drawLine(cx + 11f, cy + 10f, cx + 5f, cy + 4f, p)
+                    p.strokeWidth = 2.6f
+                    canvas.drawLine(cx - 16f, cy + 16f, cx + 16f, cy + 16f, p)
                 }
                 IconType.DURATION -> {
                     p.color = COLOR_MUTED
-                    val arc = RectF(cx - 10f, cy - 10f, cx + 10f, cy + 10f)
+                    val arc = RectF(cx - 12f, cy - 12f, cx + 12f, cy + 12f)
                     canvas.drawArc(arc, -90f, 270f, false, p)
-                    canvas.drawLine(cx, cy, cx + 6f, cy - 6f, p)
+                    canvas.drawLine(cx, cy, cx + 7f, cy - 7f, p)
                 }
                 IconType.UP -> {
                     p.color = COLOR_GREEN
                     p.style = Paint.Style.FILL
                     val path = Path().apply {
-                        moveTo(cx, cy - 10f)
-                        lineTo(cx + 10f, cy + 6f)
-                        lineTo(cx - 10f, cy + 6f)
+                        moveTo(cx, cy - 12f)
+                        lineTo(cx + 12f, cy + 7f)
+                        lineTo(cx - 12f, cy + 7f)
                         close()
                     }
                     canvas.drawPath(path, p)
@@ -292,9 +289,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     p.color = COLOR_RED
                     p.style = Paint.Style.FILL
                     val path = Path().apply {
-                        moveTo(cx, cy + 10f)
-                        lineTo(cx + 10f, cy - 6f)
-                        lineTo(cx - 10f, cy - 6f)
+                        moveTo(cx, cy + 12f)
+                        lineTo(cx + 12f, cy - 7f)
+                        lineTo(cx - 12f, cy - 7f)
                         close()
                     }
                     canvas.drawPath(path, p)

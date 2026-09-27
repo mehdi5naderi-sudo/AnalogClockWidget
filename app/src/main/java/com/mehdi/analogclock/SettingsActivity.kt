@@ -35,7 +35,7 @@ class SettingsActivity : Activity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "اندازه ساعت و مقادیر را تنظیم کنید."
+            text = "اندازه‌ها برای خوانایی بیشتر قابل افزایش هستند."
             textSize = 14f
             setTextColor(0xFF8B9AAB.toInt())
             setPadding(0, 0, 0, 20)
@@ -44,11 +44,11 @@ class SettingsActivity : Activity() {
         data class Control(val label: String, val key: String, val min: Int, val max: Int, val default: Float)
 
         val controls = listOf(
-            Control("ساعت دیجیتال", "digital_clock_size", 48, 110, 78f),
-            Control("طلوع", "info_value1_size", 18, 38, 28f),
-            Control("غروب", "info_value2_size", 18, 38, 28f),
-            Control("طول روز", "info_value3_size", 18, 38, 28f),
-            Control("فردا", "info_value4_size", 18, 38, 26f)
+            Control("ساعت دیجیتال", "digital_clock_size", 64, 120, 96f),
+            Control("طلوع", "info_value1_size", 22, 44, 34f),
+            Control("غروب", "info_value2_size", 22, 44, 34f),
+            Control("طول روز", "info_value3_size", 22, 44, 34f),
+            Control("فردا", "info_value4_size", 22, 44, 30f)
         )
 
         val bars = mutableListOf<SeekBar>()
