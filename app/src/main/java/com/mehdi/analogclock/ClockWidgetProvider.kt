@@ -43,7 +43,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK) {
+        if (intent.action == ACTION_TICK || intent.action == Intent.ACTION_USER_PRESENT) {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, ClockWidgetProvider::class.java)
@@ -423,9 +423,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 power.isScreenOn
             }
 
-            // Visible widget: minute refresh. Screen off: slow inexact refresh.
-            // Inexact alarms let Android batch wakeups with other work.
-            val interval = if (interactive) 60_000L else 10 * 60_000L
+            // Do not schedule wakeups while screen is off. USER_PRESENT restarts refresh.
+            if (!interactive) return
+            val interval = 60_000L
             val now = System.currentTimeMillis()
             val first = now - (now % interval) + interval
 
