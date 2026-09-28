@@ -16,9 +16,12 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
+import android.os.PowerManager
 import android.widget.RemoteViews
 import java.util.Calendar
 import java.util.TimeZone
+import kotlin.math.cos
+import kotlin.math.sin
 
 class ClockWidgetProvider : AppWidgetProvider() {
 
@@ -34,6 +37,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
     override fun onDisabled(context: Context) {
         (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
             .cancel(pendingIntent(context))
+        cachedStaticKey = null
+        cachedStaticBitmap = null
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -43,8 +48,13 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, ClockWidgetProvider::class.java)
             )
-            update(context, manager, ids)
-            schedule(context)
+            if (ids.isNotEmpty()) {
+                update(context, manager, ids)
+                schedule(context)
+            } else {
+                (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
+                    .cancel(pendingIntent(context))
+            }
         }
     }
 
@@ -60,74 +70,174 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
         private const val COLOR_BG = 0xFF0B0F17.toInt()
         private const val COLOR_CARD = 0xFF151B27.toInt()
-        private const val COLOR_CARD_STROKE = 0xFF222A3A.toInt()
+        private const val COLOR_CARD_STROKE = 0xFF273247.toInt()
         private const val COLOR_TEXT = 0xFFF3F5F7.toInt()
-        private const val COLOR_MUTED = 0xFF8B9AAB.toInt()
+        private const val COLOR_MUTED = 0xFFAAB6C8.toInt()
         private const val COLOR_GOLD = 0xFFFFC857.toInt()
+        private const val COLOR_ORANGE = 0xFFFF8A3D.toInt()
         private const val COLOR_GREEN = 0xFF6FD08C.toInt()
         private const val COLOR_RED = 0xFFE58A8A.toInt()
-        private const val COLOR_PROGRESS_TRACK = 0xFF1E2636.toInt()
-        private const val COLOR_PROGRESS_FILL = 0xFFFFC857.toInt()
+
+        @Volatile private var cachedStaticKey: String? = null
+        @Volatile private var cachedStaticBitmap: Bitmap? = null
 
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
+            if (ids.isEmpty()) return
+
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            // 0 = auto-fit to box (default). Positive = user override from settings.
-            val bitmap = drawWidget(
-                clockSize = p.getFloat(KEY_CLOCK_SIZE, 0f),
-                valueSizes = floatArrayOf(
-                    p.getFloat(KEY_VALUE1_SIZE, 0f),
-                    p.getFloat(KEY_VALUE2_SIZE, 0f),
-                    p.getFloat(KEY_VALUE3_SIZE, 0f),
-                    p.getFloat(KEY_VALUE4_SIZE, 0f)
-                )
+            val clockSize = p.getFloat(KEY_CLOCK_SIZE, 0f)
+            val valueSizes = floatArrayOf(
+                p.getFloat(KEY_VALUE1_SIZE, 0f),
+                p.getFloat(KEY_VALUE2_SIZE, 0f),
+                p.getFloat(KEY_VALUE3_SIZE, 0f),
+                p.getFloat(KEY_VALUE4_SIZE, 0f)
             )
+
+            val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
+            val today = SolarCalculator.solarDay(
+                cal.get(Calendar.YEAR), cal.get(Calendar.DAY_OF_YEAR)
+            )
+            val tomorrowCal = cal.clone() as Calendar
+            tomorrowCal.add(Calendar.DAY_OF_YEAR, 1)
+            val tomorrow = SolarCalculator.solarDay(
+                tomorrowCal.get(Calendar.YEAR), tomorrowCal.get(Calendar.DAY_OF_YEAR)
+            )
+
+            val staticKey = buildString {
+                append(cal.get(Calendar.YEAR)).append('-')
+                append(cal.get(Calendar.DAY_OF_YEAR)).append('|')
+                append(clockSize).append('|')
+                valueSizes.forEach { append(it).append(',') }
+            }
+
+            val staticBitmap = if (staticKey == cachedStaticKey && cachedStaticBitmap != null) {
+                cachedStaticBitmap!!
+            } else {
+                val fresh = drawStaticWidget(today, tomorrow, valueSizes)
+                cachedStaticKey = staticKey
+                cachedStaticBitmap = fresh
+                fresh
+            }
+
+            val hour = cal.get(Calendar.HOUR_OF_DAY)
+            val minute = cal.get(Calendar.MINUTE)
+            val currentMinutes = hour * 60 + minute
+
             ids.forEach { id ->
+                val bitmap = staticBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                drawDynamic(Canvas(bitmap), hour, minute, currentMinutes, today, clockSize)
+
                 val views = RemoteViews(context.packageName, R.layout.widget_clock)
                 views.setImageViewBitmap(R.id.clock_image, bitmap)
                 manager.updateAppWidget(id, views)
             }
         }
 
-        private fun drawWidget(
-            clockSize: Float,
+        private fun drawStaticWidget(
+            today: SolarCalculator.SolarDay,
+            tomorrow: SolarCalculator.SolarDay,
             valueSizes: FloatArray
         ): Bitmap {
-            val size = 512
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-
             canvas.drawColor(COLOR_BG)
 
-            val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = LinearGradient(
-                    256f, 0f, 256f, 120f,
-                    intArrayOf(0x181C2A3A, 0x000B0F17),
-                    null,
-                    Shader.TileMode.CLAMP
-                )
+            canvas.drawRect(
+                0f, 0f, 512f, 170f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        256f, 0f, 256f, 170f,
+                        intArrayOf(0x1D24334A, 0x000B0F17),
+                        null, Shader.TileMode.CLAMP
+                    )
+                }
+            )
+
+            val barLeft = 20f
+            val barRight = 492f
+            val barY = 132f
+            val barHeight = 9f
+
+            val gradient = LinearGradient(
+                barLeft, barY, barRight, barY,
+                intArrayOf(COLOR_ORANGE, 0xFF4F8DE8.toInt(), COLOR_GOLD),
+                floatArrayOf(0f, 0.52f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawRoundRect(
+                RectF(barLeft, barY, barRight, barY + barHeight),
+                5f, 5f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = gradient }
+            )
+
+            drawSunIcon(canvas, 48f, 92f, COLOR_ORANGE, sunset = true)
+            drawSunIcon(canvas, 464f, 92f, COLOR_GOLD, sunset = false)
+
+            drawLabel(canvas, "غروب", 72f, 91f, Paint.Align.LEFT, COLOR_ORANGE, 23f)
+            drawLabel(
+                canvas, SolarCalculator.formatTime(today.sunset),
+                72f, 116f, Paint.Align.LEFT, COLOR_TEXT, 28f, bold = true
+            )
+            drawLabel(canvas, "طلوع", 440f, 91f, Paint.Align.RIGHT, COLOR_GOLD, 23f)
+            drawLabel(
+                canvas, SolarCalculator.formatTime(today.sunrise),
+                440f, 116f, Paint.Align.RIGHT, COLOR_TEXT, 28f, bold = true
+            )
+
+            val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
+            val deltaText = when {
+                delta > 0 -> "↑ " + SolarCalculator.formatDelta(delta)
+                delta < 0 -> "↓ " + SolarCalculator.formatDelta(-delta)
+                else -> "—"
             }
-            canvas.drawRect(0f, 0f, size.toFloat(), 130f, glowPaint)
+            val deltaColor = when {
+                delta > 0 -> COLOR_GREEN
+                delta < 0 -> COLOR_RED
+                else -> COLOR_MUTED
+            }
 
-            val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
-            val today = SolarCalculator.solarDay(
-                cal.get(Calendar.YEAR),
-                cal.get(Calendar.DAY_OF_YEAR)
+            val pad = 10f
+            val gap = 8f
+            val cardW = (512f - pad * 2 - gap) / 2f
+            val cardTop = 170f
+            val cardH = (512f - cardTop - pad - gap) / 2f
+            val startX = pad
+
+            drawCard(
+                canvas, startX, cardTop, cardW, cardH,
+                "غروب", SolarCalculator.formatTime(today.sunset),
+                COLOR_ORANGE, valueSizes[1], icon = 0
+            )
+            drawCard(
+                canvas, startX + cardW + gap, cardTop, cardW, cardH,
+                "طلوع", SolarCalculator.formatTime(today.sunrise),
+                COLOR_GOLD, valueSizes[0], icon = 1
+            )
+            drawCard(
+                canvas, startX, cardTop + cardH + gap, cardW, cardH,
+                "طول روز", SolarCalculator.formatDuration(today.dayLengthMinutes),
+                COLOR_TEXT, valueSizes[2], icon = 2
+            )
+            drawCard(
+                canvas, startX + cardW + gap, cardTop + cardH + gap, cardW, cardH,
+                "تغییر فردا", deltaText,
+                deltaColor, valueSizes[3], icon = 3
             )
 
-            val tomorrowCal = cal.clone() as Calendar
-            tomorrowCal.add(Calendar.DAY_OF_YEAR, 1)
-            val tomorrow = SolarCalculator.solarDay(
-                tomorrowCal.get(Calendar.YEAR),
-                tomorrowCal.get(Calendar.DAY_OF_YEAR)
-            )
+            return bitmap
+        }
 
-            val hour = cal.get(Calendar.HOUR_OF_DAY)
-            val minute = cal.get(Calendar.MINUTE)
-            val currentMinutes = hour * 60 + minute
+        private fun drawDynamic(
+            canvas: Canvas,
+            hour: Int,
+            minute: Int,
+            currentMinutes: Int,
+            today: SolarCalculator.SolarDay,
+            clockSize: Float
+        ) {
             val timeText = "%02d:%02d".format(hour, minute)
+            val timeArea = RectF(16f, 8f, 496f, 76f)
 
-            // Time area: full width, from y=8 to y=100
-            val timeArea = RectF(16f, 8f, 496f, 100f)
             val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_TEXT
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -137,27 +247,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
             timePaint.textSize = if (clockSize > 0f) {
                 clockSize
             } else {
-                fitTextSize(timeText, timePaint, timeArea.width() * 0.92f, timeArea.height() * 0.90f)
+                fitTextSize(timeText, timePaint, timeArea.width() * 0.94f, timeArea.height() * 0.98f)
             }
-            val timeBounds = Rect()
-            timePaint.getTextBounds(timeText, 0, timeText.length, timeBounds)
-            val timeY = timeArea.centerY() + timeBounds.height() / 2f - timeBounds.bottom
+
+            val bounds = Rect()
+            timePaint.getTextBounds(timeText, 0, timeText.length, bounds)
+            val timeY = timeArea.centerY() + bounds.height() / 2f - bounds.bottom
             canvas.drawText(timeText, timeArea.centerX(), timeY, timePaint)
 
-            // Progress bar
-            val progressY = 108f
             val barLeft = 20f
             val barRight = 492f
-            val barHeight = 5f
-
-            canvas.drawRoundRect(
-                RectF(barLeft, progressY, barRight, progressY + barHeight),
-                3f, 3f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = COLOR_PROGRESS_TRACK
-                    style = Paint.Style.FILL
-                }
-            )
+            val barY = 132f
+            val barHeight = 9f
 
             val progress = when {
                 currentMinutes <= today.sunrise -> 0f
@@ -166,98 +267,136 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     today.dayLengthMinutes.coerceAtLeast(1)
             }.coerceIn(0f, 1f)
 
-            if (progress > 0.01f) {
-                canvas.drawRoundRect(
-                    RectF(barLeft, progressY, barLeft + (barRight - barLeft) * progress, progressY + barHeight),
-                    3f, 3f,
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = COLOR_PROGRESS_FILL
-                        style = Paint.Style.FILL
-                    }
-                )
-            }
+            // Sunrise = right, sunset = left.
+            val markerX = barRight - (barRight - barLeft) * progress
 
-            val delta = tomorrow.dayLengthMinutes - today.dayLengthMinutes
-            val deltaText = when {
-                delta > 0 -> "↑" + SolarCalculator.formatDelta(delta)
-                delta < 0 -> "↓" + SolarCalculator.formatDelta(-delta)
-                else -> "—"
-            }
-            val deltaColor = when {
-                delta > 0 -> COLOR_GREEN
-                delta < 0 -> COLOR_RED
-                else -> COLOR_MUTED
-            }
+            canvas.drawCircle(
+                markerX, barY + barHeight / 2f, 10f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_TEXT }
+            )
+            canvas.drawCircle(
+                markerX, barY + barHeight / 2f, 10f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_BG
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                }
+            )
 
-            // 2×2 cards — almost full remaining space
-            val pad = 10f
-            val gap = 8f
-            val cardW = (512f - pad * 2 - gap) / 2f
-            val cardTop = 124f
-            val cardH = (512f - cardTop - pad - gap) / 2f
-            val startX = pad
-
-            // RTL: sunset LEFT, sunrise RIGHT
-            drawCard(canvas, startX, cardTop, cardW, cardH,
-                SolarCalculator.formatTime(today.sunset), COLOR_GOLD, valueSizes[1])
-            drawCard(canvas, startX + cardW + gap, cardTop, cardW, cardH,
-                SolarCalculator.formatTime(today.sunrise), COLOR_GOLD, valueSizes[0])
-
-            drawCard(canvas, startX, cardTop + cardH + gap, cardW, cardH,
-                deltaText, deltaColor, valueSizes[3])
-            drawCard(canvas, startX + cardW + gap, cardTop + cardH + gap, cardW, cardH,
-                SolarCalculator.formatDuration(today.dayLengthMinutes), COLOR_TEXT, valueSizes[2])
-
-            return bitmap
+            drawLabel(
+                canvas, "اکنون",
+                markerX.coerceIn(54f, 458f), 165f,
+                Paint.Align.CENTER, COLOR_TEXT, 22f, bold = true
+            )
         }
 
         private fun drawCard(
             canvas: Canvas,
-            x: Float,
-            y: Float,
-            w: Float,
-            h: Float,
-            value: String,
-            valueColor: Int,
-            preferredSize: Float
+            x: Float, y: Float, w: Float, h: Float,
+            title: String, value: String, accent: Int,
+            preferredSize: Float, icon: Int
         ) {
             val rect = RectF(x, y, x + w, y + h)
 
-            canvas.drawRoundRect(rect, 14f, 14f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            canvas.drawRoundRect(rect, 16f, 16f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_CARD
-                style = Paint.Style.FILL
             })
-            canvas.drawRoundRect(rect, 14f, 14f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            canvas.drawRoundRect(rect, 16f, 16f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_CARD_STROKE
                 style = Paint.Style.STROKE
                 strokeWidth = 1.5f
             })
+            canvas.drawRoundRect(
+                RectF(x, y, x + 5f, y + h), 4f, 4f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+            )
 
-            // Text fills the card (with small inner padding)
-            val innerPad = 10f
-            val textAreaW = w - innerPad * 2
-            val textAreaH = h - innerPad * 2
+            val iconX = x + 40f
+            val centerY = y + h / 2f
+            when (icon) {
+                0 -> drawSunIcon(canvas, iconX, centerY, COLOR_ORANGE, sunset = true)
+                1 -> drawSunIcon(canvas, iconX, centerY, COLOR_GOLD, sunset = false)
+                2 -> drawSunIcon(canvas, iconX, centerY, COLOR_TEXT, sunset = false)
+                3 -> drawArrowIcon(canvas, iconX, centerY, accent)
+            }
+
+            drawLabel(
+                canvas, title, x + w / 2f + 14f, y + h * 0.43f,
+                Paint.Align.CENTER, COLOR_MUTED, 25f
+            )
 
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = valueColor
+                color = accent
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
             }
-
             paint.textSize = if (preferredSize > 0f) {
                 preferredSize
             } else {
-                fitTextSize(value, paint, textAreaW, textAreaH)
+                fitTextSize(value, paint, w - 62f, h * 0.45f)
             }
 
             val bounds = Rect()
             paint.getTextBounds(value, 0, value.length, bounds)
-            val textY = y + h / 2f + bounds.height() / 2f - bounds.bottom
-            canvas.drawText(value, x + w / 2f, textY, paint)
+            val valueY = y + h * 0.72f + bounds.height() / 2f - bounds.bottom
+            canvas.drawText(value, x + w / 2f + 12f, valueY, paint)
         }
 
-        /** Largest text size that fits inside maxW × maxH. */
+        private fun drawSunIcon(
+            canvas: Canvas, cx: Float, cy: Float, color: Int, sunset: Boolean
+        ) {
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 3.5f
+                strokeCap = Paint.Cap.ROUND
+            }
+            canvas.drawCircle(cx, cy, 9f, p)
+            for (i in 0 until 8) {
+                val a = Math.toRadians(i * 45.0)
+                canvas.drawLine(
+                    cx + cos(a).toFloat() * 15f,
+                    cy + sin(a).toFloat() * 15f,
+                    cx + cos(a).toFloat() * 21f,
+                    cy + sin(a).toFloat() * 21f,
+                    p
+                )
+            }
+            if (sunset) {
+                canvas.drawLine(cx - 18f, cy + 15f, cx + 18f, cy + 15f, p)
+                canvas.drawLine(cx - 12f, cy + 20f, cx + 12f, cy + 20f, p)
+            }
+        }
+
+        private fun drawArrowIcon(canvas: Canvas, cx: Float, cy: Float, color: Int) {
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 5f
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            canvas.drawLine(cx, cy + 17f, cx, cy - 17f, p)
+            canvas.drawLine(cx, cy - 17f, cx - 10f, cy - 7f, p)
+            canvas.drawLine(cx, cy - 17f, cx + 10f, cy - 7f, p)
+        }
+
+        private fun drawLabel(
+            canvas: Canvas, text: String, x: Float, baseline: Float,
+            align: Paint.Align, color: Int, size: Float, bold: Boolean = false
+        ) {
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                textAlign = align
+                textSize = size
+                typeface = Typeface.create(
+                    Typeface.DEFAULT, if (bold) Typeface.BOLD else Typeface.NORMAL
+                )
+            }
+            canvas.drawText(text, x, baseline, p)
+        }
+
         private fun fitTextSize(text: String, paint: Paint, maxW: Float, maxH: Float): Float {
             var lo = 8f
             var hi = maxH.coerceAtLeast(8f)
@@ -275,18 +414,29 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
         private fun schedule(context: Context) {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarm.cancel(pendingIntent(context))
+            val pending = pendingIntent(context)
+            alarm.cancel(pending)
 
-            val now = System.currentTimeMillis()
-            val next = now - (now % 60_000L) + 60_000L
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarm.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC, next, pendingIntent(context)
-                )
+            val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val interactive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+                power.isInteractive
             } else {
-                alarm.setExact(AlarmManager.RTC, next, pendingIntent(context))
+                @Suppress("DEPRECATION")
+                power.isScreenOn
             }
+
+            // Visible widget: minute refresh. Screen off: slow inexact refresh.
+            // Inexact alarms let Android batch wakeups with other work.
+            val interval = if (interactive) 60_000L else 10 * 60_000L
+            val now = System.currentTimeMillis()
+            val first = now - (now % interval) + interval
+
+            alarm.setInexactRepeating(
+                AlarmManager.RTC,
+                first,
+                interval,
+                pending
+            )
         }
 
         private fun pendingIntent(context: Context): PendingIntent =
