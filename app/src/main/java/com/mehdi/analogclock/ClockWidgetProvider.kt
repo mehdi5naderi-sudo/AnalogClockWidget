@@ -106,7 +106,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val staticKey = buildString {
                 append(cal.get(Calendar.YEAR)).append('-')
                 append(cal.get(Calendar.DAY_OF_YEAR)).append('|')
-                append(clockSize).append('|')
                 valueSizes.forEach { append(it).append(',') }
             }
 
@@ -123,14 +122,13 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val minute = cal.get(Calendar.MINUTE)
             val currentMinutes = hour * 60 + minute
 
-            ids.forEach { id ->
-                val bitmap = staticBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                drawDynamic(Canvas(bitmap), hour, minute, currentMinutes, today, clockSize)
+            // All instances show the same data: render only once per tick.
+            val bitmap = staticBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            drawDynamic(Canvas(bitmap), hour, minute, currentMinutes, today, clockSize)
 
-                val views = RemoteViews(context.packageName, R.layout.widget_clock)
-                views.setImageViewBitmap(R.id.clock_image, bitmap)
-                manager.updateAppWidget(id, views)
-            }
+            val views = RemoteViews(context.packageName, R.layout.widget_clock)
+            views.setImageViewBitmap(R.id.clock_image, bitmap)
+            manager.updateAppWidget(ids, views)
         }
 
         private fun drawStaticWidget(
