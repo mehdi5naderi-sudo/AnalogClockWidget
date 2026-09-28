@@ -47,17 +47,17 @@ jobs:
 
       - name: Prepare signing key
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -e
-          test -n "$KEYSTORE_BASE64"
+          test -n "$RELEASE_KEYSTORE_BASE64"
           test -n "$RELEASE_STORE_PASSWORD"
           test -n "$RELEASE_KEY_ALIAS"
           test -n "$RELEASE_KEY_PASSWORD"
-          echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.jks
           test -s app/release.jks
           echo "RELEASE_KEYSTORE_PATH=app/release.jks" >> "$GITHUB_ENV"
           echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
