@@ -59,7 +59,7 @@ jobs:
           test -n "$RELEASE_KEY_PASSWORD"
           echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.jks
           test -s app/release.jks
-          echo "RELEASE_KEYSTORE_PATH=app/release.jks" >> "$GITHUB_ENV"
+          echo "RELEASE_KEYSTORE_PATH=release.jks" >> "$GITHUB_ENV"
           echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
