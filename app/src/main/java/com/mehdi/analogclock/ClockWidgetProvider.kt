@@ -425,16 +425,24 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
             // Do not schedule wakeups while screen is off. USER_PRESENT restarts refresh.
             if (!interactive) return
+
+            // Use a one-shot alarm and schedule the next tick from onReceive().
+            // This is more reliable on Android/MIUI than setInexactRepeating()
+            // and keeps the widget completely idle while the screen is off.
             val interval = 60_000L
             val now = System.currentTimeMillis()
-            val first = now - (now % interval) + interval
+            val nextMinute = ((now / interval) + 1L) * interval
 
-            alarm.setInexactRepeating(
-                AlarmManager.RTC,
-                first,
-                interval,
-                pending
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarm.setAndAllowWhileIdle(
+                    AlarmManager.RTC,
+                    nextMinute,
+                    pending
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                alarm.set(AlarmManager.RTC, nextMinute, pending)
+            }
         }
 
         private fun pendingIntent(context: Context): PendingIntent =
