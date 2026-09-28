@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Signed Release APK
 
 on:
   push:
@@ -45,21 +45,40 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle.zip
 
-      - name: Build debug APK
-        run: ./gradle-8.10.2/bin/gradle --no-daemon assembleDebug
-
-      - name: Verify APK
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -e
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -n "$KEYSTORE_BASE64"
+          test -n "$RELEASE_STORE_PASSWORD"
+          test -n "$RELEASE_KEY_ALIAS"
+          test -n "$RELEASE_KEY_PASSWORD"
+          echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+          test -s app/release.jks
+          echo "RELEASE_KEYSTORE_PATH=app/release.jks" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: ./gradle-8.10.2/bin/gradle --no-daemon assembleRelease
+
+      - name: Verify signed APK
+        run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
           test -f "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AnalogClockWidget-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: AnalogClockWidget-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,9 +86,9 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: AnalogClockWidget Build #${{ github.run_number }}
           body: |
-            Automatic APK build from GitHub Actions.
+            Signed release APK built by GitHub Actions.
             Build: #${{ github.run_number }}
             Commit: ${{ github.sha }}
             Created: ${{ github.event.head_commit.timestamp }}
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/release/app-release.apk
           generate_release_notes: false
