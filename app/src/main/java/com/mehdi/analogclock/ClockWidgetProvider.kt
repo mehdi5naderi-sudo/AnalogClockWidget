@@ -16,6 +16,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.widget.RemoteViews
 import java.util.Calendar
@@ -30,8 +31,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
         schedule(context)
     }
 
-    override fun onEnabled(context: Context) {
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
+        super.onAppWidgetOptionsChanged(context, manager, appWidgetId, newOptions)
+        update(context, manager, intArrayOf(appWidgetId))
         schedule(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        refreshAll(context)
     }
 
     override fun onDisabled(context: Context) {
@@ -43,7 +50,16 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK || intent.action == Intent.ACTION_USER_PRESENT) {
+        if (intent.action == ACTION_TICK || intent.action == Intent.ACTION_USER_PRESENT || intent.action == Intent.ACTION_SCREEN_ON) {
+            refreshAll(context)
+        }
+    }
+
+    companion object {
+        private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
+        private const val PREFS = "clock_widget_prefs"
+
+        private fun refreshAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, ClockWidgetProvider::class.java)
@@ -56,11 +72,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     .cancel(pendingIntent(context))
             }
         }
-    }
-
-    companion object {
-        private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
-        private const val PREFS = "clock_widget_prefs"
 
         private const val KEY_CLOCK_SIZE = "digital_clock_size"
         private const val KEY_VALUE1_SIZE = "info_value1_size"
