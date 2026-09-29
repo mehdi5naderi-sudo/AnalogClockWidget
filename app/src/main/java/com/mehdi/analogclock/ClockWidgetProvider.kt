@@ -146,17 +146,15 @@ class ClockWidgetProvider : AppWidgetProvider() {
         }
 
         /**
-         * Angle mapping:
+         * Angle mapping (counter-clockwise from noon so that 6 is on the right):
          *   0°   = top     = 12:00 (noon)
-         *  90°   = right   = 18:00
+         *  90°   = right   = 06:00
          * 180°   = bottom  = 00:00
-         * 270°   = left    = 06:00
-         * Clockwise from noon.
+         * 270°   = left    = 18:00
          */
         private fun minutesToAngle(minutes: Int): Float {
-            // minutes from noon, then to degrees (clockwise)
-            val fromNoon = (minutes - 720 + 1440) % 1440
-            return fromNoon / 1440f * 360f
+            val fromNoonCcw = (720 - minutes + 1440) % 1440
+            return fromNoonCcw / 1440f * 360f
         }
 
         private fun angleToPoint(angleDeg: Float, radius: Float = RADIUS): Pair<Float, Float> {
@@ -180,7 +178,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val canvas = Canvas(bitmap)
             canvas.drawColor(COLOR_BG)
 
-            // Outer soft ring fill
+            // Outer soft ring
             canvas.drawCircle(CX, CY, RADIUS + 14f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_RING
                 style = Paint.Style.STROKE
@@ -194,26 +192,25 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 strokeWidth = 3.5f
             })
 
-            // Daylight arc (sunrise → sunset)
+            // Daylight arc (sunrise → sunset, upper path through noon)
             val sunriseAngle = minutesToAngle(today.sunrise)
-            val sunsetAngle = minutesToAngle(today.sunset)
             val dayArcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_DAY_ARC
                 style = Paint.Style.STROKE
                 strokeWidth = 10f
                 strokeCap = Paint.Cap.ROUND
             }
-            // Canvas arc: 0° is 3-o'clock, positive is clockwise.
-            // Our 0° is top (12 o'clock) = Canvas -90° or 270°.
+            // Canvas: 0° = 3 o'clock, positive = clockwise.
+            // Our 0° (top) maps to canvas -90°.
+            // Day path from right(6) through top(12) to left(18) is counter-clockwise on canvas → negative sweep.
             val startCanvas = sunriseAngle - 90f
-            var sweep = sunsetAngle - sunriseAngle
-            if (sweep < 0f) sweep += 360f
+            val sweep = -(today.dayLengthMinutes / 1440f * 360f)
             canvas.drawArc(
                 RectF(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS),
                 startCanvas, sweep, false, dayArcPaint
             )
 
-            // Subtle hour ticks (0, 6, 12, 18)
+            // Subtle hour ticks at 0, 6, 12, 18
             val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_MUTED
                 strokeWidth = 2.5f
@@ -226,19 +223,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 canvas.drawLine(x1, y1, x2, y2, tickPaint)
             }
 
-            // Sunrise marker + label
-            drawSolarLabel(
-                canvas, today.sunrise, "طلوع",
-                SolarCalculator.formatTime(today.sunrise),
-                COLOR_GOLD, labelSize, isSunrise = true
-            )
-
-            // Sunset marker + label
-            drawSolarLabel(
-                canvas, today.sunset, "غروب",
-                SolarCalculator.formatTime(today.sunset),
-                COLOR_ORANGE, labelSize, isSunrise = false
-            )
+            // Sunrise / sunset icons only on the rim
+            drawSunIconOnRim(canvas, today.sunrise, COLOR_GOLD, sunset = false)
+            drawSunIconOnRim(canvas, today.sunset, COLOR_ORANGE, sunset = true)
 
             // Current time marker (simple dot)
             val currentAngle = minutesToAngle(currentMinutes)
@@ -255,7 +242,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 color = COLOR_GOLD
             })
 
-            // Center digital time
+            // --- Center content ---
             val timeText = "%02d:%02d".format(hour, minute)
             val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_TEXT
@@ -266,7 +253,28 @@ class ClockWidgetProvider : AppWidgetProvider() {
             timePaint.textSize = if (clockSize > 0f) clockSize else 72f
             val timeBounds = Rect()
             timePaint.getTextBounds(timeText, 0, timeText.length, timeBounds)
-            val timeY = CY - 8f + timeBounds.height() / 2f - timeBounds.bottom
+
+            // Solar times above the digital clock (no titles)
+            val sunriseStr = SolarCalculator.formatTime(today.sunrise)
+            val sunsetStr = SolarCalculator.formatTime(today.sunset)
+            val solarSize = if (labelSize > 0f) labelSize else 26f
+            val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = solarSize
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isFakeBoldText = true
+            }
+
+            val solarY = CY - timeBounds.height() * 0.75f - solarSize - 10f
+
+            // Sunrise (gold) a bit to the left, sunset (orange) a bit to the right
+            solarPaint.color = COLOR_GOLD
+            canvas.drawText(sunriseStr, CX - 70f, solarY, solarPaint)
+            solarPaint.color = COLOR_ORANGE
+            canvas.drawText(sunsetStr, CX + 70f, solarY, solarPaint)
+
+            // Digital time
+            val timeY = CY + timeBounds.height() / 2f - timeBounds.bottom - 4f
             canvas.drawText(timeText, CX, timeY, timePaint)
 
             // Jalali date under the time
@@ -278,53 +286,45 @@ class ClockWidgetProvider : AppWidgetProvider() {
             datePaint.textSize = if (dateSize > 0f) dateSize else 28f
             val dateBounds = Rect()
             datePaint.getTextBounds(jalaliText, 0, jalaliText.length, dateBounds)
-            val dateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 6f
+            val dateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 8f
             canvas.drawText(jalaliText, CX, dateY, datePaint)
 
             return bitmap
         }
 
-        private fun drawSolarLabel(
+        private fun drawSunIconOnRim(
             canvas: Canvas,
             minutes: Int,
-            title: String,
-            timeStr: String,
-            accent: Int,
-            preferredSize: Float,
-            isSunrise: Boolean
+            color: Int,
+            sunset: Boolean
         ) {
             val angle = minutesToAngle(minutes)
-            val (px, py) = angleToPoint(angle, RADIUS)
+            val (cx, cy) = angleToPoint(angle, RADIUS)
 
-            // Small colored dot on the ring
-            canvas.drawCircle(px, py, 7f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = accent
-            })
-
-            // Place label slightly outside
-            val labelRadius = RADIUS + 38f
-            val (lx, ly) = angleToPoint(angle, labelRadius)
-
-            val size = if (preferredSize > 0f) preferredSize else 22f
-
-            // Title (طلوع / غروب)
-            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = accent
-                textSize = size * 0.85f
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+                strokeCap = Paint.Cap.ROUND
             }
-            canvas.drawText(title, lx, ly - 6f, titlePaint)
-
-            // Time value
-            val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_TEXT
-                textSize = size
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                isFakeBoldText = true
+            // Center circle of the sun
+            canvas.drawCircle(cx, cy, 8f, p)
+            // Rays
+            for (i in 0 until 8) {
+                val a = Math.toRadians(i * 45.0)
+                canvas.drawLine(
+                    cx + cos(a).toFloat() * 12f,
+                    cy + sin(a).toFloat() * 12f,
+                    cx + cos(a).toFloat() * 17f,
+                    cy + sin(a).toFloat() * 17f,
+                    p
+                )
             }
-            canvas.drawText(timeStr, lx, ly + size * 0.9f, timePaint)
+            if (sunset) {
+                // Horizon lines under the sun for sunset
+                canvas.drawLine(cx - 14f, cy + 12f, cx + 14f, cy + 12f, p)
+                canvas.drawLine(cx - 10f, cy + 16f, cx + 10f, cy + 16f, p)
+            }
         }
 
         private fun schedule(context: Context) {
