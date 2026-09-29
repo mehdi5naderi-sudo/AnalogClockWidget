@@ -50,7 +50,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK || intent.action == Intent.ACTION_USER_PRESENT || intent.action == Intent.ACTION_SCREEN_ON) {
+        if (intent.action == ACTION_TICK || intent.action == Intent.ACTION_USER_PRESENT || intent.action == Intent.ACTION_SCREEN_ON || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             refreshAll(context)
         }
     }
