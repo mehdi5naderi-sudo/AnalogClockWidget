@@ -9,8 +9,7 @@ import kotlin.math.sin
  * Approximate solar sunrise/sunset calculator (NOAA-style equations).
  * Location is fixed to Tehran by default.
  *
- * Results are cached per calendar day — the four daily indicators only
- * change once a day, so we avoid recomputing on every minute tick.
+ * Also provides simple Gregorian → Jalali date conversion for the widget.
  */
 object SolarCalculator {
 
@@ -24,6 +23,19 @@ object SolarCalculator {
         val dayLengthMinutes: Int
     )
 
+    data class JalaliDate(
+        val year: Int,
+        val month: Int,   // 1..12
+        val day: Int
+    )
+
+    private val PERSIAN_MONTHS = arrayOf(
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    )
+
+    private val PERSIAN_DIGITS = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+
     // Cache: key = year * 1000 + dayOfYear
     private val cache = HashMap<Int, SolarDay>(4)
 
@@ -35,7 +47,6 @@ object SolarCalculator {
         val sunset = solarEventMinutes(year, dayOfYear, sunrise = false)
         val day = SolarDay(sunrise, sunset, sunset - sunrise)
 
-        // Keep cache small (today + tomorrow is enough)
         if (cache.size > 8) cache.clear()
         cache[key] = day
         return day
@@ -102,4 +113,59 @@ object SolarCalculator {
         } else {
             "$minutes دقیقه"
         }
+
+    /** Convert Gregorian date to Jalali. */
+    fun toJalali(gYear: Int, gMonth: Int, gDay: Int): JalaliDate {
+        val g_d_m = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+        var gy = gYear - 1600
+        var gm = gMonth - 1
+        var gd = gDay - 1
+
+        var g_day_no = 365 * gy + (gy + 3) / 4 - (gy + 99) / 100 + (gy + 399) / 400
+        g_day_no += g_d_m[gm] + gd
+        if (gm > 1 && ((gy % 4 == 0 && gy % 100 != 0) || (gy % 400 == 0))) {
+            g_day_no++
+        }
+
+        var j_day_no = g_day_no - 79
+
+        val j_np = j_day_no / 12053
+        j_day_no %= 12053
+
+        var jy = 979 + 33 * j_np + 4 * (j_day_no / 1461)
+        j_day_no %= 1461
+
+        if (j_day_no >= 366) {
+            jy += (j_day_no - 1) / 365
+            j_day_no = (j_day_no - 1) % 365
+        }
+
+        val jm: Int
+        val jd: Int
+        if (j_day_no < 186) {
+            jm = 1 + j_day_no / 31
+            jd = 1 + j_day_no % 31
+        } else {
+            jm = 7 + (j_day_no - 186) / 30
+            jd = 1 + (j_day_no - 186) % 30
+        }
+
+        return JalaliDate(jy, jm, jd)
+    }
+
+    /** Format as "۸ مهر" (Persian digits + month name). */
+    fun formatJalaliShort(gYear: Int, gMonth: Int, gDay: Int): String {
+        val j = toJalali(gYear, gMonth, gDay)
+        val dayStr = toPersianDigits(j.day.toString())
+        val monthName = PERSIAN_MONTHS[j.month - 1]
+        return "$dayStr $monthName"
+    }
+
+    private fun toPersianDigits(s: String): String {
+        val sb = StringBuilder(s.length)
+        for (c in s) {
+            sb.append(if (c in '0'..'9') PERSIAN_DIGITS[c - '0'] else c)
+        }
+        return sb.toString()
+    }
 }

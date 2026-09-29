@@ -35,7 +35,7 @@ class SettingsActivity : Activity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "۰ = خودکار (پر کردن کامل جعبه). یا دستی بزرگ‌تر تنظیم کنید."
+            text = "۰ = اندازه پیش‌فرض. عدد بزرگ‌تر = متن درشت‌تر."
             textSize = 14f
             setTextColor(0xFF8B9AAB.toInt())
             setPadding(0, 0, 0, 20)
@@ -43,13 +43,10 @@ class SettingsActivity : Activity() {
 
         data class Control(val label: String, val key: String, val min: Int, val max: Int, val default: Float)
 
-        // 0 = auto-fit. Slider goes high so user can force very large text.
         val controls = listOf(
-            Control("ساعت دیجیتال (۰=خودکار)", "digital_clock_size", 0, 200, 0f),
-            Control("طلوع (۰=خودکار)", "info_value1_size", 0, 120, 0f),
-            Control("غروب (۰=خودکار)", "info_value2_size", 0, 120, 0f),
-            Control("طول روز (۰=خودکار)", "info_value3_size", 0, 120, 0f),
-            Control("فردا (۰=خودکار)", "info_value4_size", 0, 120, 0f)
+            Control("ساعت دیجیتال (۰=پیش‌فرض ۷۲)", "digital_clock_size", 0, 120, 0f),
+            Control("تاریخ شمسی (۰=پیش‌فرض ۲۸)", "date_size", 0, 60, 0f),
+            Control("برچسب طلوع/غروب (۰=پیش‌فرض ۲۲)", "label_size", 0, 40, 0f)
         )
 
         val bars = mutableListOf<SeekBar>()
@@ -78,7 +75,7 @@ class SettingsActivity : Activity() {
 
             fun refresh() {
                 val v = bar.progress + c.min
-                valueLabel.text = if (v == 0) "خودکار (پر جعبه)" else "$v sp"
+                valueLabel.text = if (v == 0) "پیش‌فرض" else "$v px"
             }
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) = refresh()
