@@ -69,6 +69,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val KEY_CLOCK_SIZE = "digital_clock_size"
         private const val KEY_DATE_SIZE = "date_size"
         private const val KEY_LABEL_SIZE = "label_size"
+        private const val KEY_SUNRISE_OFFSET = "sunrise_offset_y"
+        private const val KEY_SUNSET_OFFSET = "sunset_offset_y"
+        private const val KEY_DATE_OFFSET = "date_offset_y"
 
         private const val COLOR_BG = 0xFF0B0F17.toInt()
         private const val COLOR_RING = 0xFF1E2738.toInt()
@@ -109,6 +112,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val clockSize = p.getFloat(KEY_CLOCK_SIZE, 0f)
             val dateSize = p.getFloat(KEY_DATE_SIZE, 0f)
             val labelSize = p.getFloat(KEY_LABEL_SIZE, 0f)
+            val sunriseOffset = p.getFloat(KEY_SUNRISE_OFFSET, 0f)
+            val sunsetOffset = p.getFloat(KEY_SUNSET_OFFSET, 0f)
+            val dateOffset = p.getFloat(KEY_DATE_OFFSET, 0f)
 
             val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
             val year = cal.get(Calendar.YEAR)
@@ -126,6 +132,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 append(year).append('-').append(dayOfYear).append('|')
                 append(hour).append(':').append(minute).append('|')
                 append(clockSize).append(',').append(dateSize).append(',').append(labelSize)
+                append(',').append(sunriseOffset).append(',').append(sunsetOffset).append(',').append(dateOffset)
             }
 
             val bitmap = if (key == cachedKey && cachedBitmap != null) {
@@ -133,7 +140,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
             } else {
                 val fresh = drawWidget(
                     today, currentMinutes, hour, minute,
-                    jalaliText, clockSize, dateSize, labelSize
+                    jalaliText, clockSize, dateSize, labelSize,
+                    sunriseOffset, sunsetOffset, dateOffset
                 )
                 cachedKey = key
                 cachedBitmap = fresh
@@ -172,7 +180,10 @@ class ClockWidgetProvider : AppWidgetProvider() {
             jalaliText: String,
             clockSize: Float,
             dateSize: Float,
-            labelSize: Float
+            labelSize: Float,
+            sunriseOffset: Float,
+            sunsetOffset: Float,
+            dateOffset: Float
         ): Bitmap {
             val bitmap = Bitmap.createBitmap(SIZE.toInt(), SIZE.toInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -200,9 +211,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 strokeWidth = 10f
                 strokeCap = Paint.Cap.ROUND
             }
-            // Canvas: 0° = 3 o'clock, positive = clockwise.
-            // Our 0° (top) maps to canvas -90°.
-            // Day path from right(6) through top(12) to left(18) is counter-clockwise on canvas → negative sweep.
             val startCanvas = sunriseAngle - 90f
             val sweep = -(today.dayLengthMinutes / 1440f * 360f)
             canvas.drawArc(
@@ -255,6 +263,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             timePaint.getTextBounds(timeText, 0, timeText.length, timeBounds)
 
             // Solar times above the digital clock (no titles)
+            // Default: sunrise on the RIGHT, sunset on the LEFT
             val sunriseStr = SolarCalculator.formatTime(today.sunrise)
             val sunsetStr = SolarCalculator.formatTime(today.sunset)
             val solarSize = if (labelSize > 0f) labelSize else 26f
@@ -265,15 +274,17 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 isFakeBoldText = true
             }
 
-            val solarY = CY - timeBounds.height() * 0.75f - solarSize - 10f
+            val baseSolarY = CY - timeBounds.height() * 0.75f - solarSize - 10f
 
-            // Sunrise (gold) a bit to the left, sunset (orange) a bit to the right
-            solarPaint.color = COLOR_GOLD
-            canvas.drawText(sunriseStr, CX - 70f, solarY, solarPaint)
+            // Sunset (orange) on the LEFT
             solarPaint.color = COLOR_ORANGE
-            canvas.drawText(sunsetStr, CX + 70f, solarY, solarPaint)
+            canvas.drawText(sunsetStr, CX - 70f, baseSolarY + sunsetOffset, solarPaint)
 
-            // Digital time
+            // Sunrise (gold) on the RIGHT
+            solarPaint.color = COLOR_GOLD
+            canvas.drawText(sunriseStr, CX + 70f, baseSolarY + sunriseOffset, solarPaint)
+
+            // Digital time (center, fixed)
             val timeY = CY + timeBounds.height() / 2f - timeBounds.bottom - 4f
             canvas.drawText(timeText, CX, timeY, timePaint)
 
@@ -286,8 +297,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
             datePaint.textSize = if (dateSize > 0f) dateSize else 28f
             val dateBounds = Rect()
             datePaint.getTextBounds(jalaliText, 0, jalaliText.length, dateBounds)
-            val dateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 8f
-            canvas.drawText(jalaliText, CX, dateY, datePaint)
+            val baseDateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 8f
+            canvas.drawText(jalaliText, CX, baseDateY + dateOffset, datePaint)
 
             return bitmap
         }
@@ -307,9 +318,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 strokeWidth = 3f
                 strokeCap = Paint.Cap.ROUND
             }
-            // Center circle of the sun
             canvas.drawCircle(cx, cy, 8f, p)
-            // Rays
             for (i in 0 until 8) {
                 val a = Math.toRadians(i * 45.0)
                 canvas.drawLine(
@@ -321,7 +330,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 )
             }
             if (sunset) {
-                // Horizon lines under the sun for sunset
                 canvas.drawLine(cx - 14f, cy + 12f, cx + 14f, cy + 12f, p)
                 canvas.drawLine(cx - 10f, cy + 16f, cx + 10f, cy + 16f, p)
             }

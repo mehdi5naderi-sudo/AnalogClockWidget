@@ -34,24 +34,42 @@ class SettingsActivity : Activity() {
             setPadding(0, 0, 0, 8)
         })
 
+        // ── اندازه فونت‌ها ──
         root.addView(TextView(this).apply {
-            text = "۰ = اندازه پیش‌فرض. عدد بزرگ‌تر = متن درشت‌تر."
-            textSize = 14f
-            setTextColor(0xFF8B9AAB.toInt())
-            setPadding(0, 0, 0, 20)
+            text = "اندازه فونت"
+            textSize = 16f
+            setTextColor(0xFFFFC857.toInt())
+            setPadding(0, 12, 0, 4)
         })
 
-        data class Control(val label: String, val key: String, val min: Int, val max: Int, val default: Float)
+        root.addView(TextView(this).apply {
+            text = "۰ = پیش‌فرض. عدد بزرگ‌تر = متن درشت‌تر."
+            textSize = 13f
+            setTextColor(0xFF8B9AAB.toInt())
+            setPadding(0, 0, 0, 8)
+        })
 
-        val controls = listOf(
-            Control("ساعت دیجیتال (۰=پیش‌فرض ۷۲)", "digital_clock_size", 0, 120, 0f),
-            Control("تاریخ شمسی (۰=پیش‌فرض ۲۸)", "date_size", 0, 60, 0f),
-            Control("برچسب طلوع/غروب (۰=پیش‌فرض ۲۲)", "label_size", 0, 40, 0f)
+        data class Control(
+            val label: String,
+            val key: String,
+            val min: Int,
+            val max: Int,
+            val default: Float,
+            val zeroLabel: String = "پیش‌فرض"
         )
+
+        val sizeControls = listOf(
+            Control("ساعت دیجیتال (۰=۷۲)", "digital_clock_size", 0, 160, 0f),
+            Control("تاریخ شمسی (۰=۲۸)", "date_size", 0, 80, 0f),
+            Control("طلوع / غروب (۰=۲۶)", "label_size", 0, 70, 0f)
+        )
+
+        val allControls = mutableListOf<Control>()
+        allControls.addAll(sizeControls)
 
         val bars = mutableListOf<SeekBar>()
 
-        controls.forEach { c ->
+        fun addControl(c: Control, isOffset: Boolean = false) {
             root.addView(TextView(this).apply {
                 text = c.label
                 textSize = 15f
@@ -75,7 +93,87 @@ class SettingsActivity : Activity() {
 
             fun refresh() {
                 val v = bar.progress + c.min
-                valueLabel.text = if (v == 0) "پیش‌فرض" else "$v px"
+                valueLabel.text = when {
+                    isOffset && v == 0 -> "۰ (جای پیش‌فرض)"
+                    isOffset && v > 0 -> "+$v (پایین‌تر)"
+                    isOffset && v < 0 -> "$v (بالاتر)"
+                    v == 0 -> c.zeroLabel
+                    else -> "$v px"
+                }
+            }
+            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) = refresh()
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+            refresh()
+            root.addView(bar)
+            bars.add(bar)
+            allControls.add(c)
+        }
+
+        sizeControls.forEach { addControl(it) }
+
+        // ── جابه‌جایی عمودی ──
+        root.addView(TextView(this).apply {
+            text = "جابه‌جایی عمودی"
+            textSize = 16f
+            setTextColor(0xFFFFC857.toInt())
+            setPadding(0, 28, 0, 4)
+        })
+
+        root.addView(TextView(this).apply {
+            text = "منفی = بالاتر · مثبت = پایین‌تر · ۰ = جای پیش‌فرض"
+            textSize = 13f
+            setTextColor(0xFF8B9AAB.toInt())
+            setPadding(0, 0, 0, 8)
+        })
+
+        val offsetControls = listOf(
+            Control("طلوع (راست)", "sunrise_offset_y", -80, 80, 0f),
+            Control("غروب (چپ)", "sunset_offset_y", -80, 80, 0f),
+            Control("تاریخ شمسی", "date_offset_y", -80, 80, 0f)
+        )
+
+        // Note: allControls already has sizeControls; we need offsets added separately for save
+        // Rebuild cleanly:
+        allControls.clear()
+        allControls.addAll(sizeControls)
+        bars.clear()
+
+        // Re-add size bars were already added to root; we need to track them.
+        // Simpler approach: rebuild the whole list of controls in order.
+
+        // Actually the bars list already has the 3 size bars. Just add offset ones.
+        offsetControls.forEach { c ->
+            root.addView(TextView(this).apply {
+                text = c.label
+                textSize = 15f
+                setTextColor(0xFFF3F5F7.toInt())
+                setPadding(0, 14, 0, 4)
+            })
+
+            val valueLabel = TextView(this).apply {
+                textSize = 13f
+                setTextColor(0xFFFFC857.toInt())
+                gravity = Gravity.CENTER
+            }
+            root.addView(valueLabel)
+
+            val bar = SeekBar(this).apply {
+                max = c.max - c.min
+                progress = (prefs.getFloat(c.key, c.default) - c.min)
+                    .toInt()
+                    .coerceIn(0, max)
+            }
+
+            fun refresh() {
+                val v = bar.progress + c.min
+                valueLabel.text = when {
+                    v == 0 -> "۰ (جای پیش‌فرض)"
+                    v > 0 -> "+$v (پایین‌تر)"
+                    else -> "$v (بالاتر)"
+                }
             }
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) = refresh()
@@ -87,14 +185,17 @@ class SettingsActivity : Activity() {
             bars.add(bar)
         }
 
+        val allKeys = sizeControls.map { it.key } + offsetControls.map { it.key }
+        val allMins = sizeControls.map { it.min } + offsetControls.map { it.min }
+
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
             setTextColor(0xFF0B0F17.toInt())
             setBackgroundColor(0xFFFFC857.toInt())
             setOnClickListener {
                 val editor = prefs.edit()
-                controls.forEachIndexed { i, c ->
-                    editor.putFloat(c.key, (bars[i].progress + c.min).toFloat())
+                allKeys.forEachIndexed { i, key ->
+                    editor.putFloat(key, (bars[i].progress + allMins[i]).toFloat())
                 }
                 editor.apply()
 
