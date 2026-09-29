@@ -437,22 +437,37 @@ class ClockWidgetProvider : AppWidgetProvider() {
             // Do not schedule wakeups while screen is off. USER_PRESENT restarts refresh.
             if (!interactive) return
 
-            // Use a one-shot alarm and schedule the next tick from onReceive().
-            // This is more reliable on Android/MIUI than setInexactRepeating()
-            // and keeps the widget completely idle while the screen is off.
+            // The clock must move every minute while the display is on.
+            // With targetSdk 35, setAndAllowWhileIdle() is inexact and can be
+            // delayed substantially on Android/MIUI. Use an exact one-shot
+            // alarm when Android 12+ exact-alarm access is available.
             val interval = 60_000L
             val now = System.currentTimeMillis()
             val nextMinute = ((now / interval) + 1L) * interval
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarm.setAndAllowWhileIdle(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarm.canScheduleExactAlarms()) {
+                    alarm.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC,
+                        nextMinute,
+                        pending
+                    )
+                } else {
+                    alarm.setAndAllowWhileIdle(
+                        AlarmManager.RTC,
+                        nextMinute,
+                        pending
+                    )
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarm.setExactAndAllowWhileIdle(
                     AlarmManager.RTC,
                     nextMinute,
                     pending
                 )
             } else {
                 @Suppress("DEPRECATION")
-                alarm.set(AlarmManager.RTC, nextMinute, pending)
+                alarm.set(AlarmManager.RTC_WAKEUP, nextMinute, pending)
             }
         }
 
