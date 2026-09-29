@@ -15,7 +15,6 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.widget.RemoteViews
 import java.util.Calendar
 import java.util.TimeZone
@@ -53,10 +52,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK ||
-            intent.action == Intent.ACTION_USER_PRESENT ||
-            intent.action == Intent.ACTION_SCREEN_ON ||
-            intent.action == Intent.ACTION_MY_PACKAGE_REPLACED
+        val action = intent.action
+        if (action == ACTION_TICK ||
+            action == Intent.ACTION_USER_PRESENT ||
+            action == Intent.ACTION_SCREEN_ON ||
+            action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+            action == Intent.ACTION_BOOT_COMPLETED
         ) {
             refreshAll(context)
         }
@@ -335,20 +336,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        /**
+         * Always schedule the next minute tick.
+         * Uses RTC (not RTC_WAKEUP) so the device is never woken from sleep.
+         * When the screen turns back on, any due RTC alarm fires and the chain resumes.
+         * Previously we skipped scheduling while the screen was off; combined with
+         * Android 8+ restrictions on manifest SCREEN_ON receivers, that left the
+         * widget stuck until the next manual update.
+         */
         private fun schedule(context: Context) {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val pending = pendingIntent(context)
             alarm.cancel(pending)
-
-            val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            val interactive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
-                power.isInteractive
-            } else {
-                @Suppress("DEPRECATION")
-                power.isScreenOn
-            }
-
-            if (!interactive) return
 
             val interval = 60_000L
             val now = System.currentTimeMillis()
@@ -364,7 +363,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, nextMinute, pending)
             } else {
                 @Suppress("DEPRECATION")
-                alarm.set(AlarmManager.RTC_WAKEUP, nextMinute, pending)
+                alarm.set(AlarmManager.RTC, nextMinute, pending)
             }
         }
 
