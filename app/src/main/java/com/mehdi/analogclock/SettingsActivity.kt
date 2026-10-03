@@ -55,7 +55,11 @@ class SettingsActivity : Activity() {
             Control("تاریخ شمسی", "date_offset_y", -80, 80, 0f, isOffset = true)
         )
 
-        val allControls = sizeControls + offsetControls
+        val appearanceControls = listOf(
+            Control("شفافیت پس‌زمینه", "background_alpha", 0, 100, 100f)
+        )
+
+        val allControls = sizeControls + offsetControls + appearanceControls
         val bars = mutableListOf<SeekBar>()
 
         fun addSeekBar(c: Control) {
@@ -114,6 +118,21 @@ class SettingsActivity : Activity() {
             setPadding(0, 0, 0, 8)
         })
         sizeControls.forEach { addSeekBar(it) }
+
+        // ── شفافیت پس‌زمینه ──
+        root.addView(TextView(this).apply {
+            text = "ظاهر ویجت"
+            textSize = 16f
+            setTextColor(0xFFFFC857.toInt())
+            setPadding(0, 28, 0, 4)
+        })
+        root.addView(TextView(this).apply {
+            text = "۰٪ = کاملاً شفاف · ۱۰۰٪ = کاملاً مات"
+            textSize = 13f
+            setTextColor(0xFF8B9AAB.toInt())
+            setPadding(0, 0, 0, 8)
+        })
+        appearanceControls.forEach { addSeekBar(it) }
 
         // ── جابه‌جایی عمودی ──
         root.addView(TextView(this).apply {
