@@ -73,6 +73,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val KEY_SUNRISE_OFFSET = "sunrise_offset_y"
         private const val KEY_SUNSET_OFFSET = "sunset_offset_y"
         private const val KEY_DATE_OFFSET = "date_offset_y"
+        private const val KEY_BACKGROUND_ALPHA = "background_alpha"
 
         private const val COLOR_BG = 0xFF0B0F17.toInt()
         private const val COLOR_RING = 0xFF1E2738.toInt()
@@ -87,7 +88,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val SIZE = 512f
         private const val CX = 256f
         private const val CY = 256f
-        private const val RADIUS = 198f
+        private const val RADIUS = 216f
 
         @Volatile private var cachedKey: String? = null
         @Volatile private var cachedBitmap: Bitmap? = null
@@ -116,6 +117,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val sunriseOffset = p.getFloat(KEY_SUNRISE_OFFSET, 0f)
             val sunsetOffset = p.getFloat(KEY_SUNSET_OFFSET, 0f)
             val dateOffset = p.getFloat(KEY_DATE_OFFSET, 0f)
+            val backgroundAlpha = p.getFloat(KEY_BACKGROUND_ALPHA, 100f)
 
             val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
             val year = cal.get(Calendar.YEAR)
@@ -134,6 +136,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 append(hour).append(':').append(minute).append('|')
                 append(clockSize).append(',').append(dateSize).append(',').append(labelSize)
                 append(',').append(sunriseOffset).append(',').append(sunsetOffset).append(',').append(dateOffset)
+                append(',').append(backgroundAlpha)
             }
 
             val bitmap = if (key == cachedKey && cachedBitmap != null) {
@@ -142,7 +145,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val fresh = drawWidget(
                     today, currentMinutes, hour, minute,
                     jalaliText, clockSize, dateSize, labelSize,
-                    sunriseOffset, sunsetOffset, dateOffset
+                    sunriseOffset, sunsetOffset, dateOffset, backgroundAlpha
                 )
                 cachedKey = key
                 cachedBitmap = fresh
@@ -184,11 +187,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
             labelSize: Float,
             sunriseOffset: Float,
             sunsetOffset: Float,
-            dateOffset: Float
+            dateOffset: Float,
+            backgroundAlpha: Float
         ): Bitmap {
             val bitmap = Bitmap.createBitmap(SIZE.toInt(), SIZE.toInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            canvas.drawColor(COLOR_BG)
+            val bgAlpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
+            val bgColor = (COLOR_BG and 0x00FFFFFF) or (bgAlpha shl 24)
+            canvas.drawColor(bgColor)
 
             // Outer soft ring
             canvas.drawCircle(CX, CY, RADIUS + 14f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
