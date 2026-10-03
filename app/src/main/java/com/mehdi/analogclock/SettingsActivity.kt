@@ -59,7 +59,7 @@ class SettingsActivity : Activity() {
             Control("شفافیت پس‌زمینه", "background_alpha", 0, 100, 100f)
         )
 
-        val allControls = sizeControls + offsetControls + appearanceControls
+        val allControls = sizeControls + appearanceControls + offsetControls
         val bars = mutableListOf<SeekBar>()
 
         fun addSeekBar(c: Control) {
