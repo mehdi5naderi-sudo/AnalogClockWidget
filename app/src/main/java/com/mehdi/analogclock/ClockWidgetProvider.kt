@@ -292,7 +292,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
             // Jalali date under the time
             val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_MUTED
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                // Medium Sans gives the Persian date a cleaner, more polished look
+                // while keeping the existing size, position and format unchanged.
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 textAlign = Paint.Align.CENTER
             }
             datePaint.textSize = if (dateSize > 0f) dateSize else 28f
