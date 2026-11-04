@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -23,7 +22,7 @@ class SettingsActivity : Activity() {
     }
 
     private val switches = mutableMapOf<String, Switch>()
-    private val seekBars = mutableMapOf<String, Pair<SeekBar, Int>>() // key -> (bar, min)
+    private val seekBars = mutableMapOf<String, Pair<SeekBar, Int>>()
     private var latEdit: EditText? = null
     private var lonEdit: EditText? = null
 
@@ -41,7 +40,6 @@ class SettingsActivity : Activity() {
 
         root.addView(header("تنظیمات ویجت ساعت و هوا"))
 
-        // ── نمایش ──
         root.addView(sectionTitle("نمایش بخش‌ها"))
         addSwitch(root, "show_jalali", "تاریخ شمسی", true)
         addSwitch(root, "show_gregorian", "تاریخ میلادی", true)
@@ -51,12 +49,10 @@ class SettingsActivity : Activity() {
         addSwitch(root, "show_hourly", "پیش‌بینی ساعتی", true)
         addSwitch(root, "show_daily", "پیش‌بینی روزانه", true)
 
-        // ── تعداد ──
         root.addView(sectionTitle("تعداد آیتم‌های پیش‌بینی"))
         addSeek(root, "hourly_count", "ساعات آینده", 4, 12, 7)
         addSeek(root, "daily_count", "روزهای آینده", 3, 7, 5)
 
-        // ── ظاهر ──
         root.addView(sectionTitle("ظاهر"))
         addSeek(root, "digital_clock_size", "اندازه ساعت (۰=پیش‌فرض)", 0, 120, 0)
         addSeek(root, "date_size", "اندازه تاریخ (۰=پیش‌فرض)", 0, 48, 0)
@@ -64,12 +60,10 @@ class SettingsActivity : Activity() {
         addSeek(root, "background_alpha", "شفافیت پس‌زمینه٪", 0, 100, 100)
         addSwitch(root, "use_24h", "ساعت ۲۴ ساعته", true)
 
-        // ── آب‌وهوا ──
         root.addView(sectionTitle("آب‌وهوا"))
         addSwitch(root, "weather_enabled", "فعال بودن آب‌وهوا", true)
         addSeek(root, "weather_refresh_min", "فاصله به‌روزرسانی (دقیقه)", 15, 120, 30)
 
-        // ── مکان ──
         root.addView(sectionTitle("مکان (پیش‌فرض تهران)"))
         root.addView(hint("عرض جغرافیایی (latitude)"))
         latEdit = EditText(this).apply {
@@ -105,15 +99,11 @@ class SettingsActivity : Activity() {
                 latEdit?.setText(SolarCalculator.LATITUDE.toString())
                 lonEdit?.setText(SolarCalculator.LONGITUDE.toString())
             }
-        }.also {
-            (it.layoutParams as? LinearLayout.LayoutParams)?.topMargin = 12
         })
 
-        // ── رفتار ──
         root.addView(sectionTitle("رفتار ویجت"))
         addSeek(root, "tick_interval_min", "فاصله تازه‌سازی ساعت (دقیقه)", 1, 15, 1)
 
-        // Save
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
             setTextColor(0xFF0B0F17.toInt())
@@ -126,11 +116,25 @@ class SettingsActivity : Activity() {
         ).apply { topMargin = 36 })
 
         root.addView(Button(this).apply {
+            text = "دریافت دوباره آب‌وهوا"
+            setTextColor(0xFFF3F5F7.toInt())
+            setBackgroundColor(0xFF2A3548.toInt())
+            setOnClickListener {
+                WeatherData.invalidate(this@SettingsActivity)
+                WeatherData.refreshIfNeeded(this@SettingsActivity, force = true)
+                Toast.makeText(this@SettingsActivity, "در حال دریافت هوا…", Toast.LENGTH_SHORT).show()
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = 12 })
+
+        root.addView(Button(this).apply {
             text = "بازنشانی همه تنظیمات"
             setTextColor(0xFFFF8A3D.toInt())
             setBackgroundColor(0xFF1E2738.toInt())
             setOnClickListener {
-                prefs.edit().clear().apply()
+                prefs.edit().clear().commit()
                 Toast.makeText(this@SettingsActivity, "تنظیمات پاک شد — برنامه را دوباره باز کنید", Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -252,15 +256,16 @@ class SettingsActivity : Activity() {
         val lon = lonEdit?.text?.toString()?.trim().orEmpty()
         if (lat.isNotEmpty()) editor.putString("location_lat", lat) else editor.remove("location_lat")
         if (lon.isNotEmpty()) editor.putString("location_lon", lon) else editor.remove("location_lon")
-        // Force weather refresh on next update
-        editor.putLong("weather_updated_at", 0L)
-        editor.apply()
+        editor.commit()
+
+        WeatherData.invalidate(this)
+        WeatherData.refreshIfNeeded(this, force = true)
 
         val manager = AppWidgetManager.getInstance(this)
         val ids = manager.getAppWidgetIds(
             ComponentName(this, ClockWidgetProvider::class.java)
         )
         ClockWidgetProvider.update(this, manager, ids)
-        Toast.makeText(this, "ذخیره شد", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "ذخیره شد — هوا در حال به‌روزرسانی", Toast.LENGTH_SHORT).show()
     }
 }
