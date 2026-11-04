@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
@@ -149,6 +150,15 @@ class SettingsActivity : Activity() {
         })
         offsetControls.forEach { addSeekBar(it) }
 
+        val weatherSwitch = Switch(this).apply {
+            text = "نمایش آب‌وهوا (Open-Meteo · تهران)"
+            textSize = 15f
+            setTextColor(0xFFF3F5F7.toInt())
+            isChecked = prefs.getBoolean("weather_enabled", true)
+            setPadding(0, 24, 0, 8)
+        }
+        root.addView(weatherSwitch)
+
         root.addView(Button(this).apply {
             text = "ذخیره و به‌روزرسانی ویجت"
             setTextColor(0xFF0B0F17.toInt())
@@ -158,6 +168,7 @@ class SettingsActivity : Activity() {
                 allControls.forEachIndexed { i, c ->
                     editor.putFloat(c.key, (bars[i].progress + c.min).toFloat())
                 }
+                editor.putBoolean("weather_enabled", weatherSwitch.isChecked)
                 editor.apply()
 
                 val manager = AppWidgetManager.getInstance(this@SettingsActivity)
