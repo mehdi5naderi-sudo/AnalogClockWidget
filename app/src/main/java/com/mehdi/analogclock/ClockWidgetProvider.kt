@@ -110,6 +110,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
             if (ids.isEmpty()) return
 
+            WeatherData.refreshIfNeeded(context)
+            val weather = WeatherData.read(context)
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val clockSize = p.getFloat(KEY_CLOCK_SIZE, 0f)
             val dateSize = p.getFloat(KEY_DATE_SIZE, 0f)
@@ -137,6 +139,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 append(clockSize).append(',').append(dateSize).append(',').append(labelSize)
                 append(',').append(sunriseOffset).append(',').append(sunsetOffset).append(',').append(dateOffset)
                 append(',').append(backgroundAlpha)
+                weather?.let { append("|w:").append(it.temperature).append(',').append(it.max).append(',').append(it.min).append(',').append(it.rain).append(',').append(it.code) }
             }
 
             val bitmap = if (key == cachedKey && cachedBitmap != null) {
@@ -145,7 +148,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val fresh = drawWidget(
                     today, currentMinutes, hour, minute,
                     jalaliText, clockSize, dateSize, labelSize,
-                    sunriseOffset, sunsetOffset, dateOffset, backgroundAlpha
+                    sunriseOffset, sunsetOffset, dateOffset, backgroundAlpha, weather
                 )
                 cachedKey = key
                 cachedBitmap = fresh
@@ -188,7 +191,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
             sunriseOffset: Float,
             sunsetOffset: Float,
             dateOffset: Float,
-            backgroundAlpha: Float
+            backgroundAlpha: Float,
+            weather: WeatherData.Snapshot?
         ): Bitmap {
             val bitmap = Bitmap.createBitmap(SIZE.toInt(), SIZE.toInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -309,7 +313,46 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val baseDateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 8f
             canvas.drawText(jalaliText, CX, baseDateY + dateOffset, datePaint)
 
+            // Compact weather strip; the analog dial and solar markers stay unchanged.
+            if (weather != null) drawWeather(canvas, weather, baseDateY + dateOffset)
+
             return bitmap
+        }
+
+        private fun drawWeather(canvas: Canvas, weather: WeatherData.Snapshot, dateBaseline: Float) {
+            val icon = when (weather.code) {
+                0 -> "☀"
+                1, 2 -> "🌤"
+                3 -> "☁"
+                45, 48 -> "🌫"
+                in 51..67, in 80..82 -> "🌧"
+                in 71..77, in 85..86 -> "❄"
+                in 95..99 -> "⛈"
+                else -> "☀"
+            }
+            val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_GOLD
+                textAlign = Paint.Align.CENTER
+                textSize = 30f
+            }
+            val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_TEXT
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textSize = 35f
+            }
+            val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_MUTED
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                textSize = 16f
+            }
+            canvas.drawText(icon, CX - 57f, dateBaseline + 38f, iconPaint)
+            canvas.drawText(weather.temperature.toString() + "°", CX + 17f, dateBaseline + 39f, tempPaint)
+            canvas.drawText(
+                "بیشینه " + weather.max + "°   کمینه " + weather.min + "°   بارش " + weather.rain + "٪",
+                CX, dateBaseline + 65f, detailPaint
+            )
         }
 
         private fun drawSunIconOnRim(
