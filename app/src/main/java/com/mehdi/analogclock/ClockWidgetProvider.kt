@@ -94,8 +94,11 @@ class ClockWidgetProvider : AppWidgetProvider() {
         fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
             if (ids.isEmpty()) return
 
-            WeatherData.refreshIfNeeded(context)
-            val weather = WeatherData.read(context)
+            var weather = WeatherData.read(context)
+            // Always try to fetch; force when we have nothing yet
+            WeatherData.refreshIfNeeded(context, force = weather == null)
+            weather = WeatherData.read(context)
+
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
             val showJalali = p.getBoolean("show_jalali", true)
@@ -138,10 +141,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 append(hourlyCount).append(dailyCount).append(backgroundAlpha)
                 append(use24h).append(clockSize).append(dateSize).append(labelSize)
                 append(showFeels)
-                weather?.let {
-                    append("|w:").append(it.temperature).append(',').append(it.code)
-                    append(',').append(it.hourly.size).append(',').append(it.daily.size)
-                    append(',').append(it.updatedAt)
+                if (weather != null) {
+                    append("|w:").append(weather.temperature).append(',').append(weather.code)
+                    append(',').append(weather.hourly.size).append(',').append(weather.daily.size)
+                    append(',').append(weather.updatedAt)
+                } else {
+                    append("|w:null")
                 }
             }
 
@@ -208,7 +213,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val pad = 28f
             var y = pad + 8f
 
-            // ── Header: time (left) + current weather (right) ──
             val timeText = if (use24h) {
                 "%02d:%02d".format(hour, minute)
             } else {
@@ -232,43 +236,51 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val timeBaseline = y + timeBounds.height().toFloat()
             canvas.drawText(timeText, pad, timeBaseline, timePaint)
 
-            if (showCurrentWeather && weather != null) {
-                val icon = WeatherData.weatherIcon(weather.code)
-                val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = COLOR_GOLD
-                    textAlign = Paint.Align.RIGHT
-                    textSize = 40f
-                }
-                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = COLOR_TEXT
-                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                    textAlign = Paint.Align.RIGHT
-                    textSize = 48f
-                }
-                val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = COLOR_MUTED
-                    textAlign = Paint.Align.RIGHT
-                    textSize = 22f
-                }
+            if (showCurrentWeather) {
                 val rightX = W - pad
-                canvas.drawText("${weather.temperature}°", rightX, timeBaseline - 4f, tempPaint)
-                val tempW = tempPaint.measureText("${weather.temperature}°")
-                canvas.drawText(icon, rightX - tempW - 12f, timeBaseline - 6f, iconPaint)
-                val sub = buildString {
-                    if (showFeels) append("احساس ${weather.feelsLike}°")
-                    if (weather.rain > 0) {
-                        if (isNotEmpty()) append(" · ")
-                        append("بارش ${weather.rain}%")
+                if (weather != null) {
+                    val icon = WeatherData.weatherIcon(weather.code)
+                    val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_GOLD
+                        textAlign = Paint.Align.RIGHT
+                        textSize = 40f
                     }
-                }
-                if (sub.isNotEmpty()) {
-                    canvas.drawText(sub, rightX, timeBaseline + 28f, detailPaint)
+                    val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_TEXT
+                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        textAlign = Paint.Align.RIGHT
+                        textSize = 48f
+                    }
+                    val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_MUTED
+                        textAlign = Paint.Align.RIGHT
+                        textSize = 22f
+                    }
+                    canvas.drawText("${weather.temperature}°", rightX, timeBaseline - 4f, tempPaint)
+                    val tempW = tempPaint.measureText("${weather.temperature}°")
+                    canvas.drawText(icon, rightX - tempW - 12f, timeBaseline - 6f, iconPaint)
+                    val sub = buildString {
+                        if (showFeels) append("احساس ${weather.feelsLike}°")
+                        if (weather.rain > 0) {
+                            if (isNotEmpty()) append(" · ")
+                            append("بارش ${weather.rain}%")
+                        }
+                    }
+                    if (sub.isNotEmpty()) {
+                        canvas.drawText(sub, rightX, timeBaseline + 28f, detailPaint)
+                    }
+                } else {
+                    val loadingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_MUTED
+                        textAlign = Paint.Align.RIGHT
+                        textSize = 22f
+                    }
+                    canvas.drawText("در حال دریافت هوا…", rightX, timeBaseline, loadingPaint)
                 }
             }
 
             y = timeBaseline + 18f
 
-            // Weekday + dates
             val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_MUTED
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -291,7 +303,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 canvas.drawText(dateLine, pad, y, datePaint)
             }
 
-            // Sunrise / sunset
             if (showSolar) {
                 val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -308,7 +319,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 canvas.drawText(sunsetStr, pad + sunW + 28f, y, solarPaint)
             }
 
-            // Divider
             val divPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_DIVIDER
                 strokeWidth = 2f
@@ -317,7 +327,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
             canvas.drawLine(pad, y, W - pad, y, divPaint)
             y += 16f
 
-            // Hourly forecast
             if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
                 val items = weather.hourly.take(hourlyCount)
                 val colW = (W - pad * 2) / items.size.coerceAtLeast(1)
@@ -356,9 +365,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 y += 96f
                 canvas.drawLine(pad, y, W - pad, y, divPaint)
                 y += 14f
+            } else if (showHourly && weather == null) {
+                val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_MUTED
+                    textAlign = Paint.Align.CENTER
+                    textSize = 22f
+                }
+                canvas.drawText("پیش‌بینی ساعتی پس از دریافت هوا نمایش داده می‌شود", W / 2f, y + 40f, muted)
+                y += 70f
+                canvas.drawLine(pad, y, W - pad, y, divPaint)
+                y += 14f
             }
 
-            // Daily forecast
             if (showDaily && weather != null && weather.daily.isNotEmpty()) {
                 val items = weather.daily.take(dailyCount)
                 val colW = (W - pad * 2) / items.size.coerceAtLeast(1)
@@ -385,11 +403,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                         1 -> "فردا"
                         else -> SolarCalculator.weekdayFaOffset(item.dayIndex)
                     }
-                    // Shorten long weekday names
-                    val shortLabel = when {
-                        label.length > 5 -> label.take(4)
-                        else -> label
-                    }
+                    val shortLabel = if (label.length > 5) label.take(4) else label
                     canvas.drawText(shortLabel, cx, y + 18f, dayPaint)
                     canvas.drawText(WeatherData.weatherIcon(item.code), cx, y + 50f, iconPaint)
                     canvas.drawText("${item.max}°/${item.min}°", cx, y + 80f, tempPaint)
