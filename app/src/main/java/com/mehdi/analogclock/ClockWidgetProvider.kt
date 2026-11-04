@@ -11,15 +11,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.widget.RemoteViews
 import java.util.Calendar
 import java.util.TimeZone
-import kotlin.math.cos
-import kotlin.math.sin
 
 class ClockWidgetProvider : AppWidgetProvider() {
 
@@ -67,28 +64,15 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
         private const val PREFS = "clock_widget_prefs"
 
-        private const val KEY_CLOCK_SIZE = "digital_clock_size"
-        private const val KEY_DATE_SIZE = "date_size"
-        private const val KEY_LABEL_SIZE = "label_size"
-        private const val KEY_SUNRISE_OFFSET = "sunrise_offset_y"
-        private const val KEY_SUNSET_OFFSET = "sunset_offset_y"
-        private const val KEY_DATE_OFFSET = "date_offset_y"
-        private const val KEY_BACKGROUND_ALPHA = "background_alpha"
-
         private const val COLOR_BG = 0xFF0B0F17.toInt()
-        private const val COLOR_RING = 0xFF1E2738.toInt()
-        private const val COLOR_RING_STROKE = 0xFF2A3548.toInt()
         private const val COLOR_TEXT = 0xFFF3F5F7.toInt()
         private const val COLOR_MUTED = 0xFF8B9AAB.toInt()
         private const val COLOR_GOLD = 0xFFFFC857.toInt()
         private const val COLOR_ORANGE = 0xFFFF8A3D.toInt()
-        private const val COLOR_DAY_ARC = 0x33FFC857
-        private const val COLOR_MARKER = 0xFFFFFFFF.toInt()
+        private const val COLOR_DIVIDER = 0xFF2A3548.toInt()
 
-        private const val SIZE = 512f
-        private const val CX = 256f
-        private const val CY = 256f
-        private const val RADIUS = 216f
+        private const val W = 900f
+        private const val H = 420f
 
         @Volatile private var cachedKey: String? = null
         @Volatile private var cachedBitmap: Bitmap? = null
@@ -113,13 +97,24 @@ class ClockWidgetProvider : AppWidgetProvider() {
             WeatherData.refreshIfNeeded(context)
             val weather = WeatherData.read(context)
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val clockSize = p.getFloat(KEY_CLOCK_SIZE, 0f)
-            val dateSize = p.getFloat(KEY_DATE_SIZE, 0f)
-            val labelSize = p.getFloat(KEY_LABEL_SIZE, 0f)
-            val sunriseOffset = p.getFloat(KEY_SUNRISE_OFFSET, 0f)
-            val sunsetOffset = p.getFloat(KEY_SUNSET_OFFSET, 0f)
-            val dateOffset = p.getFloat(KEY_DATE_OFFSET, 0f)
-            val backgroundAlpha = p.getFloat(KEY_BACKGROUND_ALPHA, 100f)
+
+            val showJalali = p.getBoolean("show_jalali", true)
+            val showGregorian = p.getBoolean("show_gregorian", true)
+            val showSolar = p.getBoolean("show_solar", true)
+            val showCurrentWeather = p.getBoolean("show_current_weather", true)
+            val showHourly = p.getBoolean("show_hourly", true)
+            val showDaily = p.getBoolean("show_daily", true)
+            val showFeels = p.getBoolean("show_feels_like", true)
+            val hourlyCount = p.getInt("hourly_count", 7).coerceIn(4, 12)
+            val dailyCount = p.getInt("daily_count", 5).coerceIn(3, 7)
+            val backgroundAlpha = p.getFloat("background_alpha", 100f)
+            val use24h = p.getBoolean("use_24h", true)
+            val clockSize = p.getFloat("digital_clock_size", 0f)
+            val dateSize = p.getFloat("date_size", 0f)
+            val labelSize = p.getFloat("label_size", 0f)
+
+            val lat = p.getString("location_lat", null)?.toDoubleOrNull() ?: SolarCalculator.LATITUDE
+            val lon = p.getString("location_lon", null)?.toDoubleOrNull() ?: SolarCalculator.LONGITUDE
 
             val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
             val year = cal.get(Calendar.YEAR)
@@ -128,27 +123,40 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val day = cal.get(Calendar.DAY_OF_MONTH)
             val hour = cal.get(Calendar.HOUR_OF_DAY)
             val minute = cal.get(Calendar.MINUTE)
-            val currentMinutes = hour * 60 + minute
+            val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
 
-            val today = SolarCalculator.solarDay(year, dayOfYear)
-            val jalaliText = SolarCalculator.formatJalaliShort(year, month, day)
+            val today = SolarCalculator.solarDay(year, dayOfYear, lat, lon)
+            val jalaliText = SolarCalculator.formatJalaliFull(year, month, day)
+            val gregorianText = SolarCalculator.formatGregorianFa(year, month, day)
+            val weekday = SolarCalculator.weekdayFa(dayOfWeek)
 
             val key = buildString {
                 append(year).append('-').append(dayOfYear).append('|')
                 append(hour).append(':').append(minute).append('|')
-                append(clockSize).append(',').append(dateSize).append(',').append(labelSize)
-                append(',').append(sunriseOffset).append(',').append(sunsetOffset).append(',').append(dateOffset)
-                append(',').append(backgroundAlpha)
-                weather?.let { append("|w:").append(it.temperature).append(',').append(it.max).append(',').append(it.min).append(',').append(it.rain).append(',').append(it.code) }
+                append(showJalali).append(showGregorian).append(showSolar)
+                append(showCurrentWeather).append(showHourly).append(showDaily)
+                append(hourlyCount).append(dailyCount).append(backgroundAlpha)
+                append(use24h).append(clockSize).append(dateSize).append(labelSize)
+                append(showFeels)
+                weather?.let {
+                    append("|w:").append(it.temperature).append(',').append(it.code)
+                    append(',').append(it.hourly.size).append(',').append(it.daily.size)
+                    append(',').append(it.updatedAt)
+                }
             }
 
             val bitmap = if (key == cachedKey && cachedBitmap != null) {
                 cachedBitmap!!
             } else {
                 val fresh = drawWidget(
-                    today, currentMinutes, hour, minute,
-                    jalaliText, clockSize, dateSize, labelSize,
-                    sunriseOffset, sunsetOffset, dateOffset, backgroundAlpha, weather
+                    hour, minute, weekday,
+                    jalaliText, gregorianText, today,
+                    showJalali, showGregorian, showSolar,
+                    showCurrentWeather, showHourly, showDaily, showFeels,
+                    hourlyCount, dailyCount,
+                    backgroundAlpha, use24h,
+                    clockSize, dateSize, labelSize,
+                    weather
                 )
                 cachedKey = key
                 cachedBitmap = fresh
@@ -157,264 +165,262 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.widget_clock)
             views.setImageViewBitmap(R.id.clock_image, bitmap)
+
+            val settingsIntent = Intent(context, SettingsActivity::class.java)
+            val pi = PendingIntent.getActivity(
+                context, 0, settingsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.clock_image, pi)
+
             manager.updateAppWidget(ids, views)
         }
 
-        /**
-         * Angle mapping (counter-clockwise from noon so that 6 is on the right):
-         *   0°   = top     = 12:00 (noon)
-         *  90°   = right   = 06:00
-         * 180°   = bottom  = 00:00
-         * 270°   = left    = 18:00
-         */
-        private fun minutesToAngle(minutes: Int): Float {
-            val fromNoonCcw = (720 - minutes + 1440) % 1440
-            return fromNoonCcw / 1440f * 360f
-        }
-
-        private fun angleToPoint(angleDeg: Float, radius: Float = RADIUS): Pair<Float, Float> {
-            val rad = Math.toRadians(angleDeg.toDouble())
-            val x = CX + (sin(rad) * radius).toFloat()
-            val y = CY - (cos(rad) * radius).toFloat()
-            return x to y
-        }
-
         private fun drawWidget(
-            today: SolarCalculator.SolarDay,
-            currentMinutes: Int,
             hour: Int,
             minute: Int,
+            weekday: String,
             jalaliText: String,
+            gregorianText: String,
+            today: SolarCalculator.SolarDay,
+            showJalali: Boolean,
+            showGregorian: Boolean,
+            showSolar: Boolean,
+            showCurrentWeather: Boolean,
+            showHourly: Boolean,
+            showDaily: Boolean,
+            showFeels: Boolean,
+            hourlyCount: Int,
+            dailyCount: Int,
+            backgroundAlpha: Float,
+            use24h: Boolean,
             clockSize: Float,
             dateSize: Float,
             labelSize: Float,
-            sunriseOffset: Float,
-            sunsetOffset: Float,
-            dateOffset: Float,
-            backgroundAlpha: Float,
             weather: WeatherData.Snapshot?
         ): Bitmap {
-            val bitmap = Bitmap.createBitmap(SIZE.toInt(), SIZE.toInt(), Bitmap.Config.ARGB_8888)
+            val bitmap = Bitmap.createBitmap(W.toInt(), H.toInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val bgAlpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
             val bgColor = (COLOR_BG and 0x00FFFFFF) or (bgAlpha shl 24)
             canvas.drawColor(bgColor)
 
-            // Outer soft ring
-            canvas.drawCircle(CX, CY, RADIUS + 14f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_RING
-                style = Paint.Style.STROKE
-                strokeWidth = 28f
-            })
+            val pad = 28f
+            var y = pad + 8f
 
-            // Main circle stroke
-            canvas.drawCircle(CX, CY, RADIUS, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_RING_STROKE
-                style = Paint.Style.STROKE
-                strokeWidth = 3.5f
-            })
-
-            // Daylight arc (sunrise → sunset, upper path through noon)
-            val sunriseAngle = minutesToAngle(today.sunrise)
-            val dayArcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_DAY_ARC
-                style = Paint.Style.STROKE
-                strokeWidth = 10f
-                strokeCap = Paint.Cap.ROUND
-            }
-            val startCanvas = sunriseAngle - 90f
-            val sweep = -(today.dayLengthMinutes / 1440f * 360f)
-            canvas.drawArc(
-                RectF(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS),
-                startCanvas, sweep, false, dayArcPaint
-            )
-
-            // Subtle hour ticks at 0, 6, 12, 18
-            val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_MUTED
-                strokeWidth = 2.5f
-                strokeCap = Paint.Cap.ROUND
-            }
-            for (h in listOf(0, 6, 12, 18)) {
-                val a = minutesToAngle(h * 60)
-                val (x1, y1) = angleToPoint(a, RADIUS - 8f)
-                val (x2, y2) = angleToPoint(a, RADIUS + 8f)
-                canvas.drawLine(x1, y1, x2, y2, tickPaint)
+            // ── Header: time (left) + current weather (right) ──
+            val timeText = if (use24h) {
+                "%02d:%02d".format(hour, minute)
+            } else {
+                val h12 = when {
+                    hour == 0 -> 12
+                    hour > 12 -> hour - 12
+                    else -> hour
+                }
+                "%d:%02d".format(h12, minute)
             }
 
-            // Sunrise / sunset icons only on the rim
-            drawSunIconOnRim(canvas, today.sunrise, COLOR_GOLD, sunset = false)
-            drawSunIconOnRim(canvas, today.sunset, COLOR_ORANGE, sunset = true)
-
-            // Current time marker (simple dot)
-            val currentAngle = minutesToAngle(currentMinutes)
-            val (mx, my) = angleToPoint(currentAngle, RADIUS)
-            canvas.drawCircle(mx, my, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_MARKER
-            })
-            canvas.drawCircle(mx, my, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_BG
-                style = Paint.Style.STROKE
-                strokeWidth = 2.5f
-            })
-            canvas.drawCircle(mx, my, 5f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_GOLD
-            })
-
-            // --- Center content ---
-            val timeText = "%02d:%02d".format(hour, minute)
             val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_TEXT
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
+                textAlign = Paint.Align.LEFT
                 isFakeBoldText = true
+                textSize = if (clockSize > 0f) clockSize else 72f
             }
-            timePaint.textSize = if (clockSize > 0f) clockSize else 72f
             val timeBounds = Rect()
             timePaint.getTextBounds(timeText, 0, timeText.length, timeBounds)
+            val timeBaseline = y + timeBounds.height().toFloat()
+            canvas.drawText(timeText, pad, timeBaseline, timePaint)
 
-            // Solar times above the digital clock (no titles)
-            // Default: sunrise on the RIGHT, sunset on the LEFT
-            val sunriseStr = SolarCalculator.formatTime(today.sunrise)
-            val sunsetStr = SolarCalculator.formatTime(today.sunset)
-            val solarSize = if (labelSize > 0f) labelSize else 26f
-            val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = solarSize
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                isFakeBoldText = true
+            if (showCurrentWeather && weather != null) {
+                val icon = WeatherData.weatherIcon(weather.code)
+                val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_GOLD
+                    textAlign = Paint.Align.RIGHT
+                    textSize = 40f
+                }
+                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_TEXT
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.RIGHT
+                    textSize = 48f
+                }
+                val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_MUTED
+                    textAlign = Paint.Align.RIGHT
+                    textSize = 22f
+                }
+                val rightX = W - pad
+                canvas.drawText("${weather.temperature}°", rightX, timeBaseline - 4f, tempPaint)
+                val tempW = tempPaint.measureText("${weather.temperature}°")
+                canvas.drawText(icon, rightX - tempW - 12f, timeBaseline - 6f, iconPaint)
+                val sub = buildString {
+                    if (showFeels) append("احساس ${weather.feelsLike}°")
+                    if (weather.rain > 0) {
+                        if (isNotEmpty()) append(" · ")
+                        append("بارش ${weather.rain}%")
+                    }
+                }
+                if (sub.isNotEmpty()) {
+                    canvas.drawText(sub, rightX, timeBaseline + 28f, detailPaint)
+                }
             }
 
-            val baseSolarY = CY - timeBounds.height() * 0.75f - solarSize - 10f
+            y = timeBaseline + 18f
 
-            // Sunset (orange) on the LEFT
-            solarPaint.color = COLOR_ORANGE
-            canvas.drawText(sunsetStr, CX - 70f, baseSolarY + sunsetOffset, solarPaint)
-
-            // Sunrise (gold) on the RIGHT
-            solarPaint.color = COLOR_GOLD
-            canvas.drawText(sunriseStr, CX + 70f, baseSolarY + sunriseOffset, solarPaint)
-
-            // Digital time (center, fixed)
-            val timeY = CY + timeBounds.height() / 2f - timeBounds.bottom - 4f
-            canvas.drawText(timeText, CX, timeY, timePaint)
-
-            // Jalali date under the time
+            // Weekday + dates
             val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_MUTED
-                // Medium Sans gives the Persian date a cleaner, more polished look
-                // while keeping the existing size, position and format unchanged.
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                textAlign = Paint.Align.CENTER
+                textAlign = Paint.Align.LEFT
+                textSize = if (dateSize > 0f) dateSize else 26f
             }
-            datePaint.textSize = if (dateSize > 0f) dateSize else 28f
-            val dateBounds = Rect()
-            datePaint.getTextBounds(jalaliText, 0, jalaliText.length, dateBounds)
-            val baseDateY = timeY + timeBounds.height() * 0.55f + dateBounds.height() + 8f
-            canvas.drawText(jalaliText, CX, baseDateY + dateOffset, datePaint)
+            val dateLine = buildString {
+                append(weekday)
+                if (showJalali) {
+                    if (isNotEmpty()) append("  ·  ")
+                    append(jalaliText)
+                }
+                if (showGregorian) {
+                    if (isNotEmpty()) append("  ·  ")
+                    append(gregorianText)
+                }
+            }
+            if (dateLine.isNotEmpty()) {
+                y += datePaint.textSize + 4f
+                canvas.drawText(dateLine, pad, y, datePaint)
+            }
 
-            // Compact weather strip; the analog dial and solar markers stay unchanged.
-            if (weather != null) drawWeather(canvas, weather, baseDateY + dateOffset)
+            // Sunrise / sunset
+            if (showSolar) {
+                val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.LEFT
+                    textSize = if (labelSize > 0f) labelSize else 24f
+                }
+                y += solarPaint.textSize + 14f
+                val sunriseStr = "طلوع ${SolarCalculator.formatTime(today.sunrise, use24h)}"
+                val sunsetStr = "غروب ${SolarCalculator.formatTime(today.sunset, use24h)}"
+                solarPaint.color = COLOR_GOLD
+                canvas.drawText(sunriseStr, pad, y, solarPaint)
+                val sunW = solarPaint.measureText(sunriseStr)
+                solarPaint.color = COLOR_ORANGE
+                canvas.drawText(sunsetStr, pad + sunW + 28f, y, solarPaint)
+            }
+
+            // Divider
+            val divPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_DIVIDER
+                strokeWidth = 2f
+            }
+            y += 18f
+            canvas.drawLine(pad, y, W - pad, y, divPaint)
+            y += 16f
+
+            // Hourly forecast
+            if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
+                val items = weather.hourly.take(hourlyCount)
+                val colW = (W - pad * 2) / items.size.coerceAtLeast(1)
+                val hourPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_MUTED
+                    textAlign = Paint.Align.CENTER
+                    textSize = 20f
+                }
+                val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_GOLD
+                    textAlign = Paint.Align.CENTER
+                    textSize = 28f
+                }
+                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_TEXT
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    textSize = 24f
+                }
+                items.forEachIndexed { i, item ->
+                    val cx = pad + colW * i + colW / 2f
+                    val hLabel = if (use24h) {
+                        "%02d".format(item.hour)
+                    } else {
+                        val h12 = when {
+                            item.hour == 0 -> 12
+                            item.hour > 12 -> item.hour - 12
+                            else -> item.hour
+                        }
+                        h12.toString()
+                    }
+                    canvas.drawText(hLabel, cx, y + 18f, hourPaint)
+                    canvas.drawText(WeatherData.weatherIcon(item.code), cx, y + 50f, iconPaint)
+                    canvas.drawText("${item.temperature}°", cx, y + 82f, tempPaint)
+                }
+                y += 96f
+                canvas.drawLine(pad, y, W - pad, y, divPaint)
+                y += 14f
+            }
+
+            // Daily forecast
+            if (showDaily && weather != null && weather.daily.isNotEmpty()) {
+                val items = weather.daily.take(dailyCount)
+                val colW = (W - pad * 2) / items.size.coerceAtLeast(1)
+                val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_MUTED
+                    textAlign = Paint.Align.CENTER
+                    textSize = 20f
+                }
+                val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_GOLD
+                    textAlign = Paint.Align.CENTER
+                    textSize = 28f
+                }
+                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_TEXT
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    textSize = 22f
+                }
+                items.forEachIndexed { i, item ->
+                    val cx = pad + colW * i + colW / 2f
+                    val label = when (item.dayIndex) {
+                        0 -> "امروز"
+                        1 -> "فردا"
+                        else -> SolarCalculator.weekdayFaOffset(item.dayIndex)
+                    }
+                    // Shorten long weekday names
+                    val shortLabel = when {
+                        label.length > 5 -> label.take(4)
+                        else -> label
+                    }
+                    canvas.drawText(shortLabel, cx, y + 18f, dayPaint)
+                    canvas.drawText(WeatherData.weatherIcon(item.code), cx, y + 50f, iconPaint)
+                    canvas.drawText("${item.max}°/${item.min}°", cx, y + 80f, tempPaint)
+                }
+            }
 
             return bitmap
         }
 
-        private fun drawWeather(canvas: Canvas, weather: WeatherData.Snapshot, dateBaseline: Float) {
-            val icon = when (weather.code) {
-                0 -> "☀"
-                1, 2 -> "🌤"
-                3 -> "☁"
-                45, 48 -> "🌫"
-                in 51..67, in 80..82 -> "🌧"
-                in 71..77, in 85..86 -> "❄"
-                in 95..99 -> "⛈"
-                else -> "☀"
-            }
-            val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_GOLD
-                textAlign = Paint.Align.CENTER
-                textSize = 30f
-            }
-            val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_TEXT
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textSize = 35f
-            }
-            val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_MUTED
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                textSize = 16f
-            }
-            canvas.drawText(icon, CX - 57f, dateBaseline + 38f, iconPaint)
-            canvas.drawText(weather.temperature.toString() + "°", CX + 17f, dateBaseline + 39f, tempPaint)
-            canvas.drawText(
-                "بیشینه " + weather.max + "°   کمینه " + weather.min + "°   بارش " + weather.rain + "٪",
-                CX, dateBaseline + 65f, detailPaint
-            )
-        }
-
-        private fun drawSunIconOnRim(
-            canvas: Canvas,
-            minutes: Int,
-            color: Int,
-            sunset: Boolean
-        ) {
-            val angle = minutesToAngle(minutes)
-            val (cx, cy) = angleToPoint(angle, RADIUS)
-
-            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.color = color
-                style = Paint.Style.STROKE
-                strokeWidth = 3f
-                strokeCap = Paint.Cap.ROUND
-            }
-            canvas.drawCircle(cx, cy, 8f, p)
-            for (i in 0 until 8) {
-                val a = Math.toRadians(i * 45.0)
-                canvas.drawLine(
-                    cx + cos(a).toFloat() * 12f,
-                    cy + sin(a).toFloat() * 12f,
-                    cx + cos(a).toFloat() * 17f,
-                    cy + sin(a).toFloat() * 17f,
-                    p
-                )
-            }
-            if (sunset) {
-                canvas.drawLine(cx - 14f, cy + 12f, cx + 14f, cy + 12f, p)
-                canvas.drawLine(cx - 10f, cy + 16f, cx + 10f, cy + 16f, p)
-            }
-        }
-
-        /**
-         * Always schedule the next minute tick.
-         * Uses RTC (not RTC_WAKEUP) so the device is never woken from sleep.
-         * When the screen turns back on, any due RTC alarm fires and the chain resumes.
-         * Previously we skipped scheduling while the screen was off; combined with
-         * Android 8+ restrictions on manifest SCREEN_ON receivers, that left the
-         * widget stuck until the next manual update.
-         */
         private fun schedule(context: Context) {
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val pending = pendingIntent(context)
             alarm.cancel(pending)
 
-            val interval = 60_000L
+            val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val intervalMin = p.getInt("tick_interval_min", 1).coerceIn(1, 15)
+            val interval = intervalMin * 60_000L
             val now = System.currentTimeMillis()
-            val nextMinute = ((now / interval) + 1L) * interval
+            val next = ((now / interval) + 1L) * interval
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (alarm.canScheduleExactAlarms()) {
-                    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, nextMinute, pending)
+                    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pending)
                 } else {
-                    alarm.setAndAllowWhileIdle(AlarmManager.RTC, nextMinute, pending)
+                    alarm.setAndAllowWhileIdle(AlarmManager.RTC, next, pending)
                 }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, nextMinute, pending)
+                alarm.setExactAndAllowWhileIdle(AlarmManager.RTC, next, pending)
             } else {
                 @Suppress("DEPRECATION")
-                alarm.set(AlarmManager.RTC, nextMinute, pending)
+                alarm.set(AlarmManager.RTC, next, pending)
             }
         }
 
