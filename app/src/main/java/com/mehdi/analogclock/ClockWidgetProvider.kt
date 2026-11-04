@@ -95,7 +95,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             if (ids.isEmpty()) return
 
             var weather = WeatherData.read(context)
-            val needForce = weather == null || weather.hourly.isEmpty()
+            val needForce = weather == null || weather.hourly.size < 6
             WeatherData.refreshIfNeeded(context, force = needForce)
             weather = WeatherData.read(context)
 
@@ -325,7 +325,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
             canvas.drawLine(pad, y, W - pad, y, divPaint)
             y += 12f
 
-            // Section title: hourly
             if (showHourly) {
                 val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = COLOR_GOLD
