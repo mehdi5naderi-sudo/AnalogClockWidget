@@ -7,9 +7,10 @@ import kotlin.math.sin
 
 /**
  * Approximate solar sunrise/sunset calculator (NOAA-style equations).
- * Location is fixed to Tehran by default.
+ * Location defaults to Tehran; can be overridden via SharedPreferences keys
+ * used by WeatherData / Settings.
  *
- * Also provides simple Gregorian → Jalali date conversion for the widget.
+ * Also provides Gregorian → Jalali conversion and formatting helpers.
  */
 object SolarCalculator {
 
@@ -34,25 +35,46 @@ object SolarCalculator {
         "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
     )
 
+    private val GREGORIAN_MONTHS_FA = arrayOf(
+        "ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن",
+        "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر"
+    )
+
+    private val WEEKDAYS_FA = arrayOf(
+        "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"
+    )
+
     private val PERSIAN_DIGITS = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
 
-    // Cache: key = year * 1000 + dayOfYear
-    private val cache = HashMap<Int, SolarDay>(4)
+    // Cache: key = year * 1000 + dayOfYear + lat/lon hash
+    private val cache = HashMap<Long, SolarDay>(8)
 
-    fun solarDay(year: Int, dayOfYear: Int): SolarDay {
-        val key = year * 1000 + dayOfYear
+    fun solarDay(
+        year: Int,
+        dayOfYear: Int,
+        latitude: Double = LATITUDE,
+        longitude: Double = LONGITUDE
+    ): SolarDay {
+        val key = year * 10000L + dayOfYear * 10L +
+            ((latitude * 10).toInt() * 1000L + (longitude * 10).toInt())
         cache[key]?.let { return it }
 
-        val sunrise = solarEventMinutes(year, dayOfYear, sunrise = true)
-        val sunset = solarEventMinutes(year, dayOfYear, sunrise = false)
-        val day = SolarDay(sunrise, sunset, sunset - sunrise)
+        val sunrise = solarEventMinutes(year, dayOfYear, sunrise = true, latitude, longitude)
+        val sunset = solarEventMinutes(year, dayOfYear, sunrise = false, latitude, longitude)
+        val day = SolarDay(sunrise, sunset, (sunset - sunrise).coerceAtLeast(0))
 
-        if (cache.size > 8) cache.clear()
+        if (cache.size > 16) cache.clear()
         cache[key] = day
         return day
     }
 
-    private fun solarEventMinutes(year: Int, dayOfYear: Int, sunrise: Boolean): Int {
+    private fun solarEventMinutes(
+        year: Int,
+        dayOfYear: Int,
+        sunrise: Boolean,
+        latitude: Double,
+        longitude: Double
+    ): Int {
         val gamma = 2.0 * Math.PI / 365.0 * (dayOfYear - 1)
 
         val equationOfTime = 229.18 * (
@@ -72,7 +94,7 @@ object SolarCalculator {
                 0.002697 * cos(3 * gamma) +
                 0.00148 * sin(3 * gamma)
 
-        val latitudeRad = Math.toRadians(LATITUDE)
+        val latitudeRad = Math.toRadians(latitude)
         val zenithRad = Math.toRadians(90.833)
 
         val cosHourAngle =
@@ -84,7 +106,7 @@ object SolarCalculator {
         if (cosHourAngle >= 1.0) return 720
 
         val hourAngle = Math.toDegrees(acos(cosHourAngle))
-        val solarNoon = 720.0 - 4.0 * LONGITUDE - equationOfTime
+        val solarNoon = 720.0 - 4.0 * longitude - equationOfTime
 
         val utcMinutes = if (sunrise) {
             solarNoon - hourAngle * 4.0
@@ -101,18 +123,23 @@ object SolarCalculator {
             .coerceIn(0, 1439)
     }
 
-    fun formatTime(minutes: Int): String =
-        "%02d:%02d".format(minutes / 60, minutes % 60)
+    fun formatTime(minutes: Int, use24h: Boolean = true): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return if (use24h) {
+            "%02d:%02d".format(h, m)
+        } else {
+            val h12 = when {
+                h == 0 -> 12
+                h > 12 -> h - 12
+                else -> h
+            }
+            "%d:%02d".format(h12, m)
+        }
+    }
 
     fun formatDuration(minutes: Int): String =
         "%02d:%02d".format(minutes / 60, minutes % 60)
-
-    fun formatDelta(minutes: Int): String =
-        if (minutes >= 60) {
-            "${minutes / 60}س ${"%02d".format(minutes % 60)}د"
-        } else {
-            "$minutes دقیقه"
-        }
 
     /** Convert Gregorian date to Jalali. */
     fun toJalali(gYear: Int, gMonth: Int, gDay: Int): JalaliDate {
@@ -161,7 +188,33 @@ object SolarCalculator {
         return "$dayStr $monthName"
     }
 
-    private fun toPersianDigits(s: String): String {
+    /** Format as "۸ مهر ۱۴۰۳". */
+    fun formatJalaliFull(gYear: Int, gMonth: Int, gDay: Int): String {
+        val j = toJalali(gYear, gMonth, gDay)
+        return "${toPersianDigits(j.day.toString())} ${PERSIAN_MONTHS[j.month - 1]} ${toPersianDigits(j.year.toString())}"
+    }
+
+    /** Format Gregorian in Persian: "۵ اکتبر ۲۰۲۴". */
+    fun formatGregorianFa(gYear: Int, gMonth: Int, gDay: Int): String {
+        val monthName = GREGORIAN_MONTHS_FA[(gMonth - 1).coerceIn(0, 11)]
+        return "${toPersianDigits(gDay.toString())} $monthName ${toPersianDigits(gYear.toString())}"
+    }
+
+    /** Calendar.DAY_OF_WEEK (1=Sunday .. 7=Saturday) → Persian weekday name. */
+    fun weekdayFa(dayOfWeek: Int): String {
+        // Java Calendar: Sunday=1 ... Saturday=7
+        val idx = (dayOfWeek - 1).coerceIn(0, 6)
+        return WEEKDAYS_FA[idx]
+    }
+
+    /** Weekday name for offset days from today (0=today). */
+    fun weekdayFaOffset(offsetDays: Int): String {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(TIME_ZONE))
+        cal.add(java.util.Calendar.DAY_OF_YEAR, offsetDays)
+        return weekdayFa(cal.get(java.util.Calendar.DAY_OF_WEEK))
+    }
+
+    fun toPersianDigits(s: String): String {
         val sb = StringBuilder(s.length)
         for (c in s) {
             sb.append(if (c in '0'..'9') PERSIAN_DIGITS[c - '0'] else c)
