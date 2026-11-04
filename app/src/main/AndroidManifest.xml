@@ -7,7 +7,7 @@
 
     <application
         android:theme="@style/AppTheme"
-        android:label="ساعت خورشیدی"
+        android:label="ساعت و هوا"
         android:icon="@drawable/ic_clock_settings">
 
         <activity
@@ -23,7 +23,7 @@
         <receiver
             android:name=".ClockWidgetProvider"
             android:exported="true"
-            android:label="ساعت خورشیدی">
+            android:label="ساعت و هوا">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.USER_PRESENT" />
