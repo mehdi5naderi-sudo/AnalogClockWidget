@@ -16,7 +16,8 @@ object WeatherData {
     private const val PREFS = "clock_widget_prefs"
     private const val KEY_UPDATED = "weather_updated_at"
     private const val KEY_ATTEMPT = "weather_attempt_at"
-    private const val KEY_JSON = "weather_compact"
+    private const val KEY_JSON = "weather_compact_v2"
+    private const val KEY_JSON_V1 = "weather_compact"
     private const val KEY_JSON_LEGACY = "weather_json"
     private val fetching = AtomicBoolean(false)
 
@@ -55,6 +56,7 @@ object WeatherData {
         if (!isEnabled(context)) return null
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = p.getString(KEY_JSON, null)
+            ?: p.getString(KEY_JSON_V1, null)
             ?: p.getString(KEY_JSON_LEGACY, null)
             ?: return null
         return try {
@@ -78,11 +80,11 @@ object WeatherData {
         val hArr = root.optJSONArray("h")
         if (hArr != null) {
             for (i in 0 until hArr.length()) {
-                val o = hArr.getJSONObject(i)
+                val o = hArr.optJSONObject(i) ?: continue
                 hourly.add(
                     HourlyItem(
-                        hour = o.getInt("hr"),
-                        temperature = o.getInt("t"),
+                        hour = o.optInt("hr", 0),
+                        temperature = o.optInt("t", 0),
                         code = o.optInt("c", 0),
                         rainProb = o.optInt("r", 0)
                     )
@@ -93,24 +95,24 @@ object WeatherData {
         val dArr = root.optJSONArray("d")
         if (dArr != null) {
             for (i in 0 until dArr.length()) {
-                val o = dArr.getJSONObject(i)
+                val o = dArr.optJSONObject(i) ?: continue
                 daily.add(
                     DailyItem(
                         dayIndex = o.optInt("i", i),
                         code = o.optInt("c", 0),
-                        max = o.getInt("x"),
-                        min = o.getInt("n"),
+                        max = o.optInt("x", 0),
+                        min = o.optInt("n", 0),
                         rainProb = o.optInt("r", 0)
                     )
                 )
             }
         }
         return Snapshot(
-            temperature = root.getInt("t"),
-            feelsLike = root.optInt("f", root.getInt("t")),
+            temperature = root.optInt("t", 0),
+            feelsLike = root.optInt("f", root.optInt("t", 0)),
             code = root.optInt("c", 0),
-            max = root.optInt("x", root.getInt("t")),
-            min = root.optInt("n", root.getInt("t")),
+            max = root.optInt("x", root.optInt("t", 0)),
+            min = root.optInt("n", root.optInt("t", 0)),
             rain = root.optInt("r", 0),
             hourly = hourly,
             daily = daily,
@@ -118,13 +120,20 @@ object WeatherData {
         )
     }
 
-    private fun parseOpenMeteo(root: JSONObject, updatedAt: Long): Snapshot {
-        val current = root.getJSONObject("current")
-        val daily = root.getJSONObject("daily")
-        val hourly = root.optJSONObject("hourly")
+    /**
+     * Build hourly list: find first index with time >= current hour (Tehran),
+     * then take the next [count] consecutive slots. Never skip holes.
+     */
+    private fun extractHourly(hourly: JSONObject?, count: Int = 12): List<HourlyItem> {
+        if (hourly == null) return emptyList()
+        val times = hourly.optJSONArray("time") ?: return emptyList()
+        val temps = hourly.optJSONArray("temperature_2m") ?: return emptyList()
+        val codes = hourly.optJSONArray("weather_code")
+        val rains = hourly.optJSONArray("precipitation_probability")
+        val n = minOf(times.length(), temps.length())
+        if (n == 0) return emptyList()
 
         val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
-        // Floor to current hour in local ISO form for reliable string compare
         val nowFloor = "%04d-%02d-%02dT%02d:00".format(
             cal.get(Calendar.YEAR),
             cal.get(Calendar.MONTH) + 1,
@@ -132,96 +141,79 @@ object WeatherData {
             cal.get(Calendar.HOUR_OF_DAY)
         )
 
-        val hourlyList = mutableListOf<HourlyItem>()
-        if (hourly != null) {
-            val times = hourly.getJSONArray("time")
-            val temps = hourly.getJSONArray("temperature_2m")
-            val codes = hourly.getJSONArray("weather_code")
-            val rains = hourly.optJSONArray("precipitation_probability")
-            val n = minOf(times.length(), temps.length(), codes.length())
-            for (i in 0 until n) {
-                val t = times.optString(i, "")
-                if (t.isEmpty()) continue
-                // ISO local times compare lexicographically
-                if (t < nowFloor) continue
-
-                val hourPart = t.substringAfter('T', "").substringBefore(':').toIntOrNull()
-                    ?: continue
-                val temp = try {
-                    temps.getDouble(i).toInt()
-                } catch (_: Exception) {
-                    continue
-                }
-                val wcode = try {
-                    codes.getInt(i)
-                } catch (_: Exception) {
-                    0
-                }
-                val rain = rains?.optInt(i, 0) ?: 0
-
-                hourlyList.add(
-                    HourlyItem(
-                        hour = hourPart,
-                        temperature = temp,
-                        code = wcode,
-                        rainProb = rain
-                    )
-                )
-                if (hourlyList.size >= 24) break
+        var start = 0
+        for (i in 0 until n) {
+            val t = times.optString(i, "")
+            if (t.isNotEmpty() && t >= nowFloor) {
+                start = i
+                break
             }
-
-            // Fallback: if filter removed everything, take the next 12 slots from "now" index
-            if (hourlyList.isEmpty() && n > 0) {
-                var start = 0
-                for (i in 0 until n) {
-                    if (times.optString(i, "") >= nowFloor) {
-                        start = i
-                        break
-                    }
-                    start = i
-                }
-                for (i in start until minOf(start + 12, n)) {
-                    val t = times.optString(i, "")
-                    val hourPart = t.substringAfter('T', "").substringBefore(':').toIntOrNull() ?: continue
-                    try {
-                        hourlyList.add(
-                            HourlyItem(
-                                hour = hourPart,
-                                temperature = temps.getDouble(i).toInt(),
-                                code = codes.optInt(i, 0),
-                                rainProb = rains?.optInt(i, 0) ?: 0
-                            )
-                        )
-                    } catch (_: Exception) {
-                    }
-                }
-            }
+            start = i // if all past, last index; loop below still fills what it can
+        }
+        // If every timestamp is still in the past, start from 0 to show something
+        if (times.optString(n - 1, "") < nowFloor) {
+            start = maxOf(0, n - count)
         }
 
-        val dailyList = mutableListOf<DailyItem>()
-        val dCodes = daily.getJSONArray("weather_code")
-        val dMax = daily.getJSONArray("temperature_2m_max")
-        val dMin = daily.getJSONArray("temperature_2m_min")
+        val result = ArrayList<HourlyItem>(count)
+        var i = start
+        while (i < n && result.size < count) {
+            val t = times.optString(i, "")
+            val hourPart = t.substringAfter('T', "")
+                .substringBefore(':')
+                .toIntOrNull()
+            val temp = temps.optDouble(i, Double.NaN)
+            if (hourPart != null && !temp.isNaN()) {
+                result.add(
+                    HourlyItem(
+                        hour = hourPart,
+                        temperature = temp.toInt(),
+                        code = codes?.optInt(i, 0) ?: 0,
+                        rainProb = rains?.optInt(i, 0) ?: 0
+                    )
+                )
+            }
+            i++
+        }
+        return result
+    }
+
+    private fun extractDaily(daily: JSONObject): List<DailyItem> {
+        val dCodes = daily.optJSONArray("weather_code") ?: return emptyList()
+        val dMax = daily.optJSONArray("temperature_2m_max") ?: return emptyList()
+        val dMin = daily.optJSONArray("temperature_2m_min") ?: return emptyList()
         val dRain = daily.optJSONArray("precipitation_probability_max")
+        val list = ArrayList<DailyItem>(dCodes.length())
         for (i in 0 until dCodes.length()) {
-            dailyList.add(
+            list.add(
                 DailyItem(
                     dayIndex = i,
                     code = dCodes.optInt(i, 0),
-                    max = dMax.getDouble(i).toInt(),
-                    min = dMin.getDouble(i).toInt(),
+                    max = dMax.optDouble(i, 0.0).toInt(),
+                    min = dMin.optDouble(i, 0.0).toInt(),
                     rainProb = dRain?.optInt(i, 0) ?: 0
                 )
             )
         }
+        return list
+    }
 
+    private fun parseOpenMeteo(root: JSONObject, updatedAt: Long): Snapshot {
+        val current = root.getJSONObject("current")
+        val daily = root.getJSONObject("daily")
+        val hourlyObj = root.optJSONObject("hourly")
+
+        val hourlyList = extractHourly(hourlyObj, 12)
+        val dailyList = extractDaily(daily)
+
+        val temp = current.getDouble("temperature_2m").toInt()
         return Snapshot(
-            temperature = current.getDouble("temperature_2m").toInt(),
-            feelsLike = current.optDouble("apparent_temperature", current.getDouble("temperature_2m")).toInt(),
+            temperature = temp,
+            feelsLike = current.optDouble("apparent_temperature", temp.toDouble()).toInt(),
             code = current.optInt("weather_code", 0),
-            max = if (dMax.length() > 0) dMax.getDouble(0).toInt() else current.getDouble("temperature_2m").toInt(),
-            min = if (dMin.length() > 0) dMin.getDouble(0).toInt() else current.getDouble("temperature_2m").toInt(),
-            rain = dRain?.optInt(0, 0) ?: 0,
+            max = dailyList.firstOrNull()?.max ?: temp,
+            min = dailyList.firstOrNull()?.min ?: temp,
+            rain = dailyList.firstOrNull()?.rainProb ?: 0,
             hourly = hourlyList,
             daily = dailyList,
             updatedAt = updatedAt
@@ -237,8 +229,7 @@ object WeatherData {
         root.put("n", snapshot.min)
         root.put("r", snapshot.rain)
         val hArr = JSONArray()
-        // Keep up to 12 hours so the widget always has hourly data after restart
-        snapshot.hourly.take(12).forEach { item ->
+        for (item in snapshot.hourly) {
             hArr.put(
                 JSONObject()
                     .put("hr", item.hour)
@@ -249,7 +240,7 @@ object WeatherData {
         }
         root.put("h", hArr)
         val dArr = JSONArray()
-        snapshot.daily.take(7).forEach { item ->
+        for (item in snapshot.daily) {
             dArr.put(
                 JSONObject()
                     .put("i", item.dayIndex)
@@ -279,6 +270,7 @@ object WeatherData {
             .putLong(KEY_UPDATED, 0L)
             .putLong(KEY_ATTEMPT, 0L)
             .remove(KEY_JSON)
+            .remove(KEY_JSON_V1)
             .remove(KEY_JSON_LEGACY)
             .commit()
     }
@@ -299,7 +291,7 @@ object WeatherData {
                 fetching.set(false)
                 return
             }
-            if (attempted > 0L && now - attempted < 60_000L) {
+            if (attempted > 0L && now - attempted < 45_000L) {
                 fetching.set(false)
                 return
             }
@@ -327,7 +319,7 @@ object WeatherData {
                     connectTimeout = 15000
                     readTimeout = 15000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "SolarClockWidget/2.1")
+                    setRequestProperty("User-Agent", "SolarClockWidget/2.2")
                 }
                 try {
                     val code = connection.responseCode
@@ -337,10 +329,15 @@ object WeatherData {
                     val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                     val full = JSONObject(body)
                     val snapshot = parseOpenMeteo(full, System.currentTimeMillis())
+                    // Guard: never store a nearly-empty hourly list as "success"
+                    if (snapshot.hourly.size < 3) {
+                        throw IllegalStateException("Hourly parse too short: ${snapshot.hourly.size}")
+                    }
                     val compact = toCompact(snapshot)
 
                     p.edit()
                         .putString(KEY_JSON, compact)
+                        .remove(KEY_JSON_V1)
                         .remove(KEY_JSON_LEGACY)
                         .putLong(KEY_UPDATED, System.currentTimeMillis())
                         .commit()
