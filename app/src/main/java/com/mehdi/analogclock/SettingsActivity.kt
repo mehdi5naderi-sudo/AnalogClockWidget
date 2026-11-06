@@ -49,10 +49,6 @@ class SettingsActivity : Activity() {
         addSwitch(root, "show_hourly", "پیش‌بینی ساعتی", true)
         addSwitch(root, "show_daily", "پیش‌بینی روزانه", true)
 
-        root.addView(sectionTitle("تعداد آیتم‌های پیش‌بینی"))
-        addSeek(root, "hourly_count", "ساعات آینده", 4, 12, 7)
-        addSeek(root, "daily_count", "روزهای آینده", 3, 7, 5)
-
         root.addView(sectionTitle("ظاهر"))
         addSeek(root, "digital_clock_size", "اندازه ساعت (۰=پیش‌فرض)", 0, 120, 0)
         addSeek(root, "date_size", "اندازه تاریخ (۰=پیش‌فرض)", 0, 48, 0)
