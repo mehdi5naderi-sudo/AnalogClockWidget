@@ -124,7 +124,11 @@ object WeatherData {
      * Build hourly list: find first index with time >= current hour (Tehran),
      * then take the next [count] consecutive slots. Never skip holes.
      */
-    private fun extractHourly(hourly: JSONObject?, count: Int = 12, timeZone: String): List<HourlyItem> {
+    private fun extractHourly(
+        hourly: JSONObject?,
+        count: Int = 12,
+        referenceTime: String
+    ): List<HourlyItem> {
         if (hourly == null) return emptyList()
         val times = hourly.optJSONArray("time") ?: return emptyList()
         val temps = hourly.optJSONArray("temperature_2m") ?: return emptyList()
@@ -133,13 +137,20 @@ object WeatherData {
         val n = minOf(times.length(), temps.length())
         if (n == 0) return emptyList()
 
-        val cal = Calendar.getInstance(TimeZone.getTimeZone(timeZone.ifBlank { SolarCalculator.TIME_ZONE }))
-        val nowFloor = "%04d-%02d-%02dT%02d:00".format(
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH) + 1,
-            cal.get(Calendar.DAY_OF_MONTH),
-            cal.get(Calendar.HOUR_OF_DAY)
-        )
+        // Use Open-Meteo's own current.time so the reference and hourly
+        // timestamps always share exactly the same timezone and clock.
+        val nowFloor = referenceTime.take(13).let { value ->
+            if (value.length == 13 && value[10] == 'T') "$value:00"
+            else {
+                val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
+                "%04d-%02d-%02dT%02d:00".format(
+                    cal.get(Calendar.YEAR),
+                    cal.get(Calendar.MONTH) + 1,
+                    cal.get(Calendar.DAY_OF_MONTH),
+                    cal.get(Calendar.HOUR_OF_DAY)
+                )
+            }
+        }
 
         var start = 0
         for (i in 0 until n) {
@@ -207,7 +218,7 @@ object WeatherData {
         val daily = root.getJSONObject("daily")
         val hourlyObj = root.optJSONObject("hourly")
 
-        val hourlyList = extractHourly(hourlyObj, 6, timeZone)
+        val hourlyList = extractHourly(hourlyObj, 6, current.optString("time", ""))
         val dailyList = extractDaily(daily)
 
         val temp = current.getDouble("temperature_2m").toInt()
