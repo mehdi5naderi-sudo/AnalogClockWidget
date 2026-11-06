@@ -281,28 +281,32 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 color = COLOR_MUTED
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 textAlign = Paint.Align.LEFT
-                textSize = 42f
+                textSize = 46f
             }
             canvas.drawText(weekday, pad, 348f, datePaint)
-            var dateY = 395f
-            if (showJalali) {
-                canvas.drawText(jalaliText.substringBeforeLast(" "), pad, dateY, smallDatePaint)
-                dateY += 42f
-            }
-            if (showGregorian) {
-                canvas.drawText(gregorianText.substringBeforeLast(" "), pad, dateY, smallDatePaint)
+            val jalaliShort = jalaliText.substringBeforeLast(" ")
+            val gregorianShort = gregorianText.substringBeforeLast(" ")
+            // Keep both calendar dates on one line, with a clear gap.
+            if (showJalali && showGregorian) {
+                canvas.drawText(jalaliShort, pad, 410f, smallDatePaint)
+                canvas.drawText(gregorianShort, 190f, 410f, smallDatePaint)
+            } else if (showJalali) {
+                canvas.drawText(jalaliShort, pad, 410f, smallDatePaint)
+            } else if (showGregorian) {
+                canvas.drawText(gregorianShort, pad, 410f, smallDatePaint)
             }
 
             if (showSolar) {
                 val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     typeface = Typeface.create("sans-serif", Typeface.BOLD)
                     textAlign = Paint.Align.LEFT
-                    textSize = maxOf(labelSize, 44f).coerceAtMost(48f)
+                    textSize = maxOf(labelSize, 48f).coerceAtMost(52f)
                     color = COLOR_GOLD
                 }
-                canvas.drawText(SolarCalculator.formatTime(today.sunrise, use24h), pad, 478f, solarPaint)
+                // Sunrise and sunset moved lower and farther apart.
+                canvas.drawText(SolarCalculator.formatTime(today.sunrise, use24h), pad, 492f, solarPaint)
                 solarPaint.color = COLOR_ORANGE
-                canvas.drawText(SolarCalculator.formatTime(today.sunset, use24h), pad + 155f, 478f, solarPaint)
+                canvas.drawText(SolarCalculator.formatTime(today.sunset, use24h), 205f, 492f, solarPaint)
             }
 
             // RIGHT: large forecast figures, fewer visual decorations.
