@@ -71,8 +71,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val COLOR_ORANGE = 0xFFFF8A3D.toInt()
         private const val COLOR_DIVIDER = 0xFF2A3548.toInt()
 
-        private const val W = 520f
-        private const val H = 1000f
+        private const val W = 1000f
+        private const val H = 520f
 
         @Volatile private var cachedKey: String? = null
         @Volatile private var cachedBitmap: Bitmap? = null
@@ -221,22 +221,15 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val bgColor = (COLOR_BG and 0x00FFFFFF) or (bgAlpha shl 24)
             canvas.drawColor(bgColor)
 
-            val pad = 26f
-            val divPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val pad = 28f
+            val leftWidth = 350f
+            val splitX = 390f
+            val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_DIVIDER
                 strokeWidth = 2f
             }
-            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_GOLD
-                textAlign = Paint.Align.RIGHT
-                textSize = 24f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            }
-            val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = COLOR_MUTED
-                textAlign = Paint.Align.RIGHT
-                textSize = 19f
-            }
+            canvas.drawLine(splitX, 24f, splitX, H - 24f, divider)
+
             val timeText = if (use24h) "%02d:%02d".format(hour, minute) else {
                 val h12 = when { hour == 0 -> 12; hour > 12 -> hour - 12; else -> hour }
                 "%d:%02d".format(h12, minute)
@@ -246,135 +239,123 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 textAlign = Paint.Align.LEFT
                 isFakeBoldText = true
-                textSize = if (clockSize > 0f) clockSize.coerceAtMost(76f) else 70f
+                textSize = if (clockSize > 0f) clockSize.coerceAtMost(82f) else 76f
             }
-            val timeBaseline = pad + timePaint.textSize
-            canvas.drawText(timeText, pad, timeBaseline, timePaint)
+            canvas.drawText(timeText, pad, 105f, timePaint)
 
             if (showCurrentWeather) {
+                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_GOLD
+                    typeface = Typeface.DEFAULT_BOLD
+                    textAlign = Paint.Align.LEFT
+                    textSize = 42f
+                }
+                val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = COLOR_MUTED
+                    textAlign = Paint.Align.LEFT
+                    textSize = 18f
+                }
                 if (weather != null) {
-                    val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = COLOR_TEXT
-                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                        textAlign = Paint.Align.RIGHT
-                        textSize = 48f
-                    }
-                    val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = COLOR_MUTED
-                        textAlign = Paint.Align.RIGHT
-                        textSize = 18f
-                    }
-                    canvas.drawText("${weather.temperature}°", W - pad, timeBaseline - 4f, tempPaint)
+                    canvas.drawText("${weather.temperature}°", pad, 165f, tempPaint)
                     val sub = if (showFeels) "${weatherLabel(weather.code)} · احساس ${weather.feelsLike}°"
                               else weatherLabel(weather.code)
-                    canvas.drawText(sub, W - pad, timeBaseline + 25f, detailPaint)
+                    canvas.drawText(sub, pad, 195f, detailPaint)
                 } else {
-                    mutedPaint.textSize = 18f
-                    canvas.drawText("در حال دریافت هوا…", W - pad, timeBaseline, mutedPaint)
+                    canvas.drawText("در حال دریافت هوا…", pad, 165f, detailPaint)
                 }
             }
 
-            var y = 145f
             val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = COLOR_MUTED
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                textAlign = Paint.Align.RIGHT
-                textSize = if (dateSize > 0f) dateSize.coerceAtMost(30f) else 22f
+                textAlign = Paint.Align.LEFT
+                textSize = if (dateSize > 0f) dateSize.coerceAtMost(25f) else 21f
             }
             val dateLine = buildString {
                 append(weekday)
                 if (showJalali) { if (isNotEmpty()) append("  ·  "); append(jalaliText) }
                 if (showGregorian) { if (isNotEmpty()) append("  ·  "); append(gregorianText) }
             }
-            if (dateLine.isNotEmpty()) {
-                canvas.drawText(dateLine, W - pad, y, datePaint)
-                y += 42f
-            }
+            if (dateLine.isNotEmpty()) canvas.drawText(dateLine, pad, 265f, datePaint)
 
             if (showSolar) {
                 val solarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                    textAlign = Paint.Align.RIGHT
-                    textSize = if (labelSize > 0f) labelSize.coerceAtMost(26f) else 20f
+                    typeface = Typeface.DEFAULT_BOLD
+                    textAlign = Paint.Align.LEFT
+                    textSize = if (labelSize > 0f) labelSize.coerceAtMost(23f) else 19f
                     color = COLOR_GOLD
                 }
-                canvas.drawText("طلوع ${SolarCalculator.formatTime(today.sunrise, use24h)}", W - pad, y, solarPaint)
+                canvas.drawText("طلوع ${SolarCalculator.formatTime(today.sunrise, use24h)}", pad, 330f, solarPaint)
                 solarPaint.color = COLOR_ORANGE
-                solarPaint.textAlign = Paint.Align.LEFT
-                canvas.drawText("غروب ${SolarCalculator.formatTime(today.sunset, use24h)}", pad, y, solarPaint)
-                y += 36f
+                canvas.drawText("غروب ${SolarCalculator.formatTime(today.sunset, use24h)}", pad, 365f, solarPaint)
             }
 
-            y += 4f
-            canvas.drawLine(pad, y, W - pad, y, divPaint)
-            y += 36f
+            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_GOLD
+                textAlign = Paint.Align.RIGHT
+                textSize = 22f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_MUTED
+                textAlign = Paint.Align.CENTER
+                textSize = 18f
+            }
+            val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = COLOR_TEXT
+                textAlign = Paint.Align.CENTER
+                textSize = 24f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            val rainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFF79C8FF.toInt()
+                textAlign = Paint.Align.CENTER
+                textSize = 17f
+            }
+            val rightLeft = splitX + 22f
+            val rightRight = W - pad
+            val contentW = rightRight - rightLeft
 
             if (showHourly) {
-                canvas.drawText("۶ ساعت آینده", W - pad, y, titlePaint)
-                y += 22f
+                canvas.drawText("۶ ساعت آینده", rightRight, 38f, titlePaint)
                 if (weather != null && weather.hourly.isNotEmpty()) {
                     val items = weather.hourly.take(6)
-                    val gapX = 12f
-                    val cardW = (W - pad * 2 - gapX) / 2f
-                    val cardH = 76f
-                    val gapY = 10f
+                    val gap = 10f
+                    val cardW = (contentW - gap * 2f) / 3f
+                    val cardH = 92f
                     items.forEachIndexed { i, item ->
-                        val col = i % 2
-                        val row = i / 2
-                        val left = pad + col * (cardW + gapX)
-                        val top = y + row * (cardH + gapY)
-                        val rectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = 0xFF151E2B.toInt()
-                            style = Paint.Style.FILL
-                        }
-                        canvas.drawRoundRect(left, top, left + cardW, top + cardH, 12f, 12f, rectPaint)
+                        val col = i % 3
+                        val row = i / 3
+                        val x = rightLeft + col * (cardW + gap)
+                        val y = 52f + row * (cardH + 10f)
+                        val card = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF151E2B.toInt() }
+                        canvas.drawRoundRect(x, y, x + cardW, y + cardH, 12f, 12f, card)
                         val hourLabel = if (use24h) "%02d:00".format(item.hour) else {
                             val h12 = when { item.hour == 0 -> 12; item.hour > 12 -> item.hour - 12; else -> item.hour }
                             "%d:00".format(h12)
                         }
-                        val hourPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = COLOR_MUTED
-                            textSize = 19f
-                            textAlign = Paint.Align.LEFT
-                        }
-                        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = COLOR_TEXT
-                            textSize = 26f
-                            typeface = Typeface.DEFAULT_BOLD
-                            textAlign = Paint.Align.RIGHT
-                        }
-                        val rainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = 0xFF79C8FF.toInt()
-                            textSize = 18f
-                            textAlign = Paint.Align.CENTER
-                        }
-                        canvas.drawText(hourLabel, left + 14f, top + 29f, hourPaint)
-                        canvas.drawText("${item.temperature}°", left + cardW - 14f, top + 31f, valuePaint)
-                        canvas.drawText("احتمال بارش ${item.rainProb}٪", left + cardW / 2f, top + 60f, rainPaint)
+                        mutedPaint.textSize = 18f
+                        canvas.drawText(hourLabel, x + cardW / 2f, y + 28f, mutedPaint)
+                        valuePaint.textSize = 25f
+                        canvas.drawText("${item.temperature}°", x + cardW / 2f, y + 57f, valuePaint)
+                        rainPaint.textSize = 16f
+                        canvas.drawText("بارش ${item.rainProb}٪", x + cardW / 2f, y + 81f, rainPaint)
                     }
-                    y += 3 * (cardH + gapY) - gapY + 20f
                 } else {
-                    mutedPaint.textAlign = Paint.Align.CENTER
-                    canvas.drawText("پیش‌بینی ساعتی در دسترس نیست", W / 2f, y + 35f, mutedPaint)
-                    mutedPaint.textAlign = Paint.Align.RIGHT
-                    y += 70f
+                    canvas.drawText("پیش‌بینی ساعتی در دسترس نیست", rightLeft + contentW / 2f, 110f, mutedPaint)
                 }
-                canvas.drawLine(pad, y, W - pad, y, divPaint)
-                y += 36f
             }
 
             if (showDaily) {
-                canvas.drawText("۳ روز آینده", W - pad, y, titlePaint)
-                y += 22f
+                val dailyTop = if (showHourly) 270f else 48f
+                canvas.drawLine(rightLeft, dailyTop - 12f, rightRight, dailyTop - 12f, divider)
+                canvas.drawText("۳ روز آینده", rightRight, dailyTop + 12f, titlePaint)
                 if (weather != null && weather.daily.isNotEmpty()) {
                     val items = weather.daily.take(3)
                     items.forEachIndexed { i, item ->
-                        val top = y + i * 82f
-                        val rectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = 0xFF151E2B.toInt()
-                            style = Paint.Style.FILL
-                        }
-                        canvas.drawRoundRect(pad, top, W - pad, top + 70f, 12f, 12f, rectPaint)
+                        val y = dailyTop + 32f + i * 58f
+                        val card = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF151E2B.toInt() }
+                        canvas.drawRoundRect(rightLeft, y, rightRight, y + 48f, 10f, 10f, card)
                         val day = when (item.dayIndex) {
                             0 -> "امروز"
                             1 -> "فردا"
@@ -382,27 +363,26 @@ class ClockWidgetProvider : AppWidgetProvider() {
                         }
                         val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                             color = COLOR_MUTED
-                            textSize = 20f
+                            textSize = 19f
                             textAlign = Paint.Align.LEFT
                         }
-                        val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        val dailyTemp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                             color = COLOR_TEXT
-                            textSize = 25f
+                            textSize = 22f
                             typeface = Typeface.DEFAULT_BOLD
                             textAlign = Paint.Align.CENTER
                         }
-                        val rainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        val dailyRain = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                             color = 0xFF79C8FF.toInt()
-                            textSize = 18f
+                            textSize = 17f
                             textAlign = Paint.Align.RIGHT
                         }
-                        canvas.drawText(day, pad + 14f, top + 42f, dayPaint)
-                        canvas.drawText("${item.max}° / ${item.min}°", W / 2f, top + 42f, tempPaint)
-                        canvas.drawText("بارش ${item.rainProb}٪", W - pad - 14f, top + 42f, rainPaint)
+                        canvas.drawText(day, rightLeft + 14f, y + 31f, dayPaint)
+                        canvas.drawText("${item.max}° / ${item.min}°", rightLeft + contentW / 2f, y + 31f, dailyTemp)
+                        canvas.drawText("بارش ${item.rainProb}٪", rightRight - 14f, y + 31f, dailyRain)
                     }
                 } else {
-                    mutedPaint.textAlign = Paint.Align.CENTER
-                    canvas.drawText("پیش‌بینی روزانه در دسترس نیست", W / 2f, y + 35f, mutedPaint)
+                    canvas.drawText("پیش‌بینی روزانه در دسترس نیست", rightLeft + contentW / 2f, dailyTop + 60f, mutedPaint)
                 }
             }
             return bitmap
