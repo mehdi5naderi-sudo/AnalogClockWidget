@@ -198,7 +198,11 @@ object WeatherData {
         return list
     }
 
-    private fun parseOpenMeteo(root: JSONObject, updatedAt: Long, timeZone: String): Snapshot {
+    private fun parseOpenMeteo(
+        root: JSONObject,
+        updatedAt: Long,
+        timeZone: String = SolarCalculator.TIME_ZONE
+    ): Snapshot {
         val current = root.getJSONObject("current")
         val daily = root.getJSONObject("daily")
         val hourlyObj = root.optJSONObject("hourly")
