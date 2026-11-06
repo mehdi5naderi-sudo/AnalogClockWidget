@@ -13,6 +13,8 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Rect
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -192,6 +194,58 @@ class ClockWidgetProvider : AppWidgetProvider() {
             manager.updateAppWidget(ids, views)
         }
 
+        /**
+         * Weather-aware background palette. The local hour controls the day/night
+         * treatment while the weather code selects the dominant atmosphere.
+         * All palettes stay deliberately muted so foreground text remains clear.
+         */
+        private fun weatherBackgroundColors(code: Int, hour: Int): Pair<Int, Int> {
+            val night = hour < 6 || hour >= 20
+            val twilight = !night && (hour < 8 || hour >= 17)
+
+            return when {
+                code in 95..99 -> if (night) {
+                    0xFF171629.toInt() to 0xFF30243B.toInt()
+                } else {
+                    0xFF343044.toInt() to 0xFF594052.toInt()
+                }
+                code in 71..77 || code in 85..86 -> if (night) {
+                    0xFF182B3B.toInt() to 0xFF293B4A.toInt()
+                } else {
+                    0xFF456477.toInt() to 0xFF263D50.toInt()
+                }
+                code in 51..67 || code in 80..82 -> if (night) {
+                    0xFF102638.toInt() to 0xFF1D344A.toInt()
+                } else {
+                    0xFF31566D.toInt() to 0xFF1B344B.toInt()
+                }
+                code == 45 || code == 48 -> if (night) {
+                    0xFF202A35.toInt() to 0xFF303B48.toInt()
+                } else {
+                    0xFF52616D.toInt() to 0xFF354553.toInt()
+                }
+                code == 3 -> if (night) {
+                    0xFF172535.toInt() to 0xFF293746.toInt()
+                } else {
+                    0xFF536779.toInt() to 0xFF34495D.toInt()
+                }
+                code == 1 || code == 2 -> if (night) {
+                    0xFF17283D.toInt() to 0xFF344052.toInt()
+                } else if (twilight) {
+                    0xFF72566A.toInt() to 0xFF34465E.toInt()
+                } else {
+                    0xFF39708D.toInt() to 0xFF24445F.toInt()
+                }
+                else -> if (night) {
+                    0xFF101D32.toInt() to 0xFF26364C.toInt()
+                } else if (twilight) {
+                    0xFF76566A.toInt() to 0xFF35465F.toInt()
+                } else {
+                    0xFF397A9B.toInt() to 0xFF244A68.toInt()
+                }
+            }
+        }
+
         private fun weatherLabel(code: Int): String = when (code) {
             0 -> "صاف"
             1, 2 -> "کمی ابر"
@@ -230,8 +284,24 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val bitmap = Bitmap.createBitmap(W.toInt(), H.toInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val bgAlpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
-            val bgColor = (COLOR_BG and 0x00FFFFFF) or (bgAlpha shl 24)
-            canvas.drawColor(bgColor)
+            val (backgroundTop, backgroundBottom) = weatherBackgroundColors(
+                weather?.code ?: 0,
+                hour
+            )
+            val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(
+                    0f, 0f, W, H,
+                    backgroundTop, backgroundBottom,
+                    Shader.TileMode.CLAMP
+                )
+                alpha = bgAlpha
+            }
+            canvas.drawRect(0f, 0f, W, H, backgroundPaint)
+            // A subtle dark veil keeps white, gold and blue text readable in every theme.
+            val readabilityPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x33040A14
+            }
+            canvas.drawRect(0f, 0f, W, H, readabilityPaint)
 
             val pad = 28f
             val splitX = 365f
