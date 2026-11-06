@@ -302,7 +302,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 }
                 canvas.drawText("طلوع  ${SolarCalculator.formatTime(today.sunrise, use24h)}", pad, 478f, solarPaint)
                 solarPaint.color = COLOR_ORANGE
-                canvas.drawText("غروب  ${SolarCalculator.formatTime(today.sunset, use24h)}", pad, 516f, solarPaint)
+                canvas.drawText("غروب  ${SolarCalculator.formatTime(today.sunset, use24h)}", pad, 510f, solarPaint)
             }
 
             // RIGHT: large forecast figures, fewer visual decorations.
