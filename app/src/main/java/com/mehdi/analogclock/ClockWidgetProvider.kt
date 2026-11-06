@@ -107,6 +107,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
             weather = WeatherData.read(context)
 
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            contextTimeZoneForDisplay = p.getString("location_tz", null)
+                ?.ifBlank { SolarCalculator.TIME_ZONE } ?: SolarCalculator.TIME_ZONE
 
             val showJalali = p.getBoolean("show_jalali", true)
             val showGregorian = p.getBoolean("show_gregorian", true)
