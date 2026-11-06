@@ -10,6 +10,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Build
@@ -50,7 +52,10 @@ class ClockWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         val action = intent.action
-        if (action == ACTION_TICK ||
+        if (action == ACTION_REFRESH) {
+            WeatherData.refreshIfNeeded(context, force = true)
+            refreshAll(context)
+        } else if (action == ACTION_TICK ||
             action == Intent.ACTION_USER_PRESENT ||
             action == Intent.ACTION_SCREEN_ON ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED ||
@@ -62,6 +67,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
+        private const val ACTION_REFRESH = "com.mehdi.analogclock.REFRESH"
         private const val PREFS = "clock_widget_prefs"
 
         private const val COLOR_BG = 0xFF0B0F17.toInt()
@@ -76,6 +82,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
         @Volatile private var cachedKey: String? = null
         @Volatile private var cachedBitmap: Bitmap? = null
+        @Volatile private var contextTimeZoneForDisplay: String = SolarCalculator.TIME_ZONE
 
         private fun refreshAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -171,12 +178,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_clock)
             views.setImageViewBitmap(R.id.clock_image, bitmap)
 
-            val settingsIntent = Intent(context, SettingsActivity::class.java)
-            val pi = PendingIntent.getActivity(
-                context, 0, settingsIntent,
+            val refreshIntent = Intent(context, ClockWidgetProvider::class.java)
+                .setAction(ACTION_REFRESH)
+            val refreshPi = PendingIntent.getBroadcast(
+                context, 1002, refreshIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.clock_image, pi)
+            // Tapping the widget refreshes weather; settings remain available from the app icon.
+            views.setOnClickPendingIntent(R.id.clock_image, refreshPi)
 
             manager.updateAppWidget(ids, views)
         }
@@ -262,7 +271,51 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     textSize = 39f
                 }
                 if (weather != null) {
-                    canvas.drawText("${weather.temperature}°", pad, 242f, tempPaint)
+                    val temperatureText = "${weather.temperature}°"
+                    canvas.drawText(temperatureText, pad, 242f, tempPaint)
+
+                    // Compact last-successful API time, without a caption.
+                    val updatedCal = Calendar.getInstance(
+                        TimeZone.getTimeZone(
+                            contextTimeZoneForDisplay
+                        )
+                    )
+                    updatedCal.timeInMillis = weather.updatedAt
+                    val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_MUTED
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        textAlign = Paint.Align.LEFT
+                        textSize = 30f
+                    }
+                    val stampX = pad + tempPaint.measureText(temperatureText) + 10f
+                    if (weather.updatedAt > 0L && stampX < 285f) {
+                        canvas.drawText(
+                            "%02d:%02d".format(
+                                updatedCal.get(Calendar.HOUR_OF_DAY),
+                                updatedCal.get(Calendar.MINUTE)
+                            ),
+                            stampX, 235f, stampPaint
+                        )
+                    }
+
+                    // Refresh glyph; the widget surface is the tap target.
+                    val refreshPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = COLOR_GOLD
+                        style = Paint.Style.STROKE
+                        strokeWidth = 7f
+                        strokeCap = Paint.Cap.ROUND
+                    }
+                    val refreshBounds = RectF(302f, 188f, 344f, 230f)
+                    canvas.drawArc(refreshBounds, 45f, 285f, false, refreshPaint)
+                    refreshPaint.style = Paint.Style.FILL
+                    val arrow = Path().apply {
+                        moveTo(339f, 183f)
+                        lineTo(346f, 201f)
+                        lineTo(326f, 198f)
+                        close()
+                    }
+                    canvas.drawPath(arrow, refreshPaint)
+
                     val condition = if (showFeels) "${weatherLabel(weather.code)}  ·  ${weather.feelsLike}°"
                                     else weatherLabel(weather.code)
                     canvas.drawText(condition, pad, 282f, detailPaint)
