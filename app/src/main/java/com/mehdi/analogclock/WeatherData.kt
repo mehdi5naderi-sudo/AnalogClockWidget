@@ -203,7 +203,7 @@ object WeatherData {
         val daily = root.getJSONObject("daily")
         val hourlyObj = root.optJSONObject("hourly")
 
-        val hourlyList = extractHourly(hourlyObj, 12)
+        val hourlyList = extractHourly(hourlyObj, 6)
         val dailyList = extractDaily(daily)
 
         val temp = current.getDouble("temperature_2m").toInt()
@@ -312,7 +312,7 @@ object WeatherData {
                         "&current=temperature_2m,apparent_temperature,weather_code,precipitation" +
                         "&hourly=temperature_2m,weather_code,precipitation_probability" +
                         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-                        "&forecast_days=7&timezone=${tz.replace("/", "%2F")}"
+                        "&forecast_days=3&timezone=${tz.replace("/", "%2F")}"
                 )
                 val connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
