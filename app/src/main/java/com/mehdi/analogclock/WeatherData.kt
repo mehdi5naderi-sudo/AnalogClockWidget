@@ -124,7 +124,7 @@ object WeatherData {
      * Build hourly list: find first index with time >= current hour (Tehran),
      * then take the next [count] consecutive slots. Never skip holes.
      */
-    private fun extractHourly(hourly: JSONObject?, count: Int = 12): List<HourlyItem> {
+    private fun extractHourly(hourly: JSONObject?, count: Int = 12, timeZone: String): List<HourlyItem> {
         if (hourly == null) return emptyList()
         val times = hourly.optJSONArray("time") ?: return emptyList()
         val temps = hourly.optJSONArray("temperature_2m") ?: return emptyList()
@@ -133,7 +133,7 @@ object WeatherData {
         val n = minOf(times.length(), temps.length())
         if (n == 0) return emptyList()
 
-        val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
+        val cal = Calendar.getInstance(TimeZone.getTimeZone(timeZone.ifBlank { SolarCalculator.TIME_ZONE }))
         val nowFloor = "%04d-%02d-%02dT%02d:00".format(
             cal.get(Calendar.YEAR),
             cal.get(Calendar.MONTH) + 1,
@@ -198,12 +198,12 @@ object WeatherData {
         return list
     }
 
-    private fun parseOpenMeteo(root: JSONObject, updatedAt: Long): Snapshot {
+    private fun parseOpenMeteo(root: JSONObject, updatedAt: Long, timeZone: String): Snapshot {
         val current = root.getJSONObject("current")
         val daily = root.getJSONObject("daily")
         val hourlyObj = root.optJSONObject("hourly")
 
-        val hourlyList = extractHourly(hourlyObj, 6)
+        val hourlyList = extractHourly(hourlyObj, 6, timeZone)
         val dailyList = extractDaily(daily)
 
         val temp = current.getDouble("temperature_2m").toInt()
@@ -328,7 +328,7 @@ object WeatherData {
                     }
                     val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                     val full = JSONObject(body)
-                    val snapshot = parseOpenMeteo(full, System.currentTimeMillis())
+                    val snapshot = parseOpenMeteo(full, System.currentTimeMillis(), tz)
                     // Guard: never store a nearly-empty hourly list as "success"
                     if (snapshot.hourly.size < 3) {
                         throw IllegalStateException("Hourly parse too short: ${snapshot.hourly.size}")
