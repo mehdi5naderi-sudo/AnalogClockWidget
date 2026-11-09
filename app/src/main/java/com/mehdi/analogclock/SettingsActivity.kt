@@ -60,7 +60,7 @@ class SettingsActivity : Activity() {
         addSwitch(root, "weather_enabled", "فعال بودن آب‌وهوا", true)
         addSeek(root, "weather_refresh_min", "فاصله به‌روزرسانی (دقیقه)", 15, 120, 30)
 
-        root.addView(sectionTitle("مکان (پیش‌فرض تهران)"))
+        root.addView(sectionTitle("مکان (پیش‌فرض پونک)"))
         root.addView(hint("عرض جغرافیایی (latitude)"))
         latEdit = EditText(this).apply {
             setText(prefs.getString("location_lat", SolarCalculator.LATITUDE.toString()))
@@ -88,7 +88,7 @@ class SettingsActivity : Activity() {
         root.addView(lonEdit)
 
         root.addView(Button(this).apply {
-            text = "بازنشانی مکان به تهران"
+            text = "بازنشانی مکان به پونک"
             setTextColor(0xFFF3F5F7.toInt())
             setBackgroundColor(0xFF2A3548.toInt())
             setOnClickListener {
