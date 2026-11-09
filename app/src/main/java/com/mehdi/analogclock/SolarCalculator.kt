@@ -14,8 +14,8 @@ import kotlin.math.sin
  */
 object SolarCalculator {
 
-    const val LATITUDE = 35.6892
-    const val LONGITUDE = 51.3890
+    const val LATITUDE = 35.76333
+    const val LONGITUDE = 51.33667
     const val TIME_ZONE = "Asia/Tehran"
 
     data class SolarDay(
