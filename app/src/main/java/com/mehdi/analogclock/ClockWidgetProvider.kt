@@ -388,8 +388,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     }
                     canvas.drawPath(arrow, refreshPaint)
 
-                    val condition = if (showFeels) "${weatherLabel(weather.code)}  ·  ${weather.feelsLike}°"
-                                    else weatherLabel(weather.code)
+                    val condition = if (showFeels) "${weatherLabel(weather.code)} [${weather.code}]  ·  ${weather.feelsLike}°"
+                                    else "${weatherLabel(weather.code)} [${weather.code}]"
                     canvas.drawText(condition, pad, 282f, detailPaint)
                 } else {
                     canvas.drawText("دریافت هوا…", pad, 242f, detailPaint)
