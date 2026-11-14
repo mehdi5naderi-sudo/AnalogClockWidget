@@ -3,63 +3,146 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
+    android:orientation="horizontal"
     android:background="#FF0B0F17"
     android:padding="10dp">
 
-    <!-- Time -->
-    <TextView
-        android:id="@+id/tv_time"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="--:--"
-        android:textColor="#FFFFFFFF"
-        android:textSize="36sp"
-        android:textStyle="bold"
-        android:includeFontPadding="false" />
+    <!-- ==================== LEFT: Time + Date + Solar ==================== -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.25"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
 
-    <!-- Temperature -->
-    <TextView
-        android:id="@+id/tv_temp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="--°"
-        android:textColor="#FFFFC857"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:includeFontPadding="false" />
+        <TextView
+            android:id="@+id/tv_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--:--"
+            android:textColor="#FFFFFFFF"
+            android:textSize="38sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false" />
 
-    <!-- Condition -->
-    <TextView
-        android:id="@+id/tv_condition"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text=""
-        android:textColor="#FFAAAAAA"
-        android:textSize="13sp" />
+        <TextView
+            android:id="@+id/tv_dates"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textColor="#FFCCCCCC"
+            android:textSize="12sp" />
 
-    <!-- Weekday + Dates -->
-    <TextView
-        android:id="@+id/tv_dates"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text=""
-        android:textColor="#FFCCCCCC"
-        android:textSize="12sp" />
+        <TextView
+            android:id="@+id/tv_solar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textColor="#FFFFC857"
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
-    <!-- Sunrise / Sunset -->
-    <TextView
-        android:id="@+id/tv_solar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text=""
-        android:textColor="#FFFFC857"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="#FF2A3548" />
+
+    <!-- ==================== CENTER: Current Weather ==================== -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.85"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--°"
+            android:textColor="#FFFFC857"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/tv_condition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="#FFAAAAAA"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tv_updated"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textColor="#FF666666"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="#FF2A3548" />
+
+    <!-- ==================== RIGHT: Forecasts ==================== -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.05"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_hourly_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ساعتی"
+            android:textColor="#FF8B9AAB"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/tv_hourly"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="#FFEEEEEE"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tv_daily_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="روزانه"
+            android:textColor="#FF8B9AAB"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/tv_daily"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="#FFEEEEEE"
+            android:textSize="11sp" />
+
+    </LinearLayout>
 
 </LinearLayout>
