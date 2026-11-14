@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.widget.RemoteViews
 import java.util.Calendar
 import java.util.TimeZone
@@ -29,7 +28,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
     ) {
         super.onAppWidgetOptionsChanged(context, manager, appWidgetId, newOptions)
         update(context, manager, intArrayOf(appWidgetId))
-        schedule(context)
     }
 
     override fun onEnabled(context: Context) {
@@ -45,19 +43,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        val action = intent.action
-        if (action == ACTION_REFRESH) {
-            try {
-                WeatherData.refreshIfNeeded(context, force = true)
-            } catch (_: Exception) {}
-            refreshAll(context)
-        } else if (action == ACTION_TICK ||
-            action == Intent.ACTION_USER_PRESENT ||
-            action == Intent.ACTION_SCREEN_ON ||
-            action == Intent.ACTION_MY_PACKAGE_REPLACED ||
-            action == Intent.ACTION_BOOT_COMPLETED
-        ) {
-            refreshAll(context)
+        when (intent.action) {
+            ACTION_REFRESH, ACTION_TICK,
+            Intent.ACTION_USER_PRESENT,
+            Intent.ACTION_SCREEN_ON,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_BOOT_COMPLETED -> refreshAll(context)
         }
     }
 
@@ -65,7 +56,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val TAG = "ClockWidget"
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
         private const val ACTION_REFRESH = "com.mehdi.analogclock.REFRESH"
-        private const val PREFS = "clock_widget_prefs"
 
         private fun refreshAll(context: Context) {
             try {
@@ -78,7 +68,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     schedule(context)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "refreshAll failed", e)
+                Log.e(TAG, "refreshAll", e)
             }
         }
 
@@ -88,158 +78,53 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_clock)
 
             try {
-                // Safe defaults first
-                views.setTextViewText(R.id.tv_time, "--:--")
-                views.setTextViewText(R.id.tv_temp, "--°")
-                views.setTextViewText(R.id.tv_condition, "")
-                views.setTextViewText(R.id.tv_weekday, "")
-                views.setTextViewText(R.id.tv_dates, "")
-                views.setTextViewText(R.id.tv_solar, "")
-                views.setTextViewText(R.id.tv_updated, "")
-                views.setTextViewText(R.id.tv_hourly, "")
-                views.setTextViewText(R.id.tv_daily, "")
-
-                val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                val showJalali = p.getBoolean("show_jalali", true)
-                val showGregorian = p.getBoolean("show_gregorian", true)
-                val showSolar = p.getBoolean("show_solar", true)
-                val showCurrentWeather = p.getBoolean("show_current_weather", true)
-                val showHourly = p.getBoolean("show_hourly", true)
-                val showDaily = p.getBoolean("show_daily", true)
-                val showFeels = p.getBoolean("show_feels_like", true)
-                val use24h = p.getBoolean("use_24h", true)
-
-                val lat = p.getString("location_lat", null)?.toDoubleOrNull() ?: SolarCalculator.LATITUDE
-                val lon = p.getString("location_lon", null)?.toDoubleOrNull() ?: SolarCalculator.LONGITUDE
-
-                val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
-                val year = cal.get(Calendar.YEAR)
-                val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
-                val month = cal.get(Calendar.MONTH) + 1
-                val day = cal.get(Calendar.DAY_OF_MONTH)
+                val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tehran"))
                 val hour = cal.get(Calendar.HOUR_OF_DAY)
                 val minute = cal.get(Calendar.MINUTE)
-                val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-
-                // Time
-                val timeText = if (use24h) {
-                    "%02d:%02d".format(hour, minute)
-                } else {
-                    val h12 = when {
-                        hour == 0 -> 12
-                        hour > 12 -> hour - 12
-                        else -> hour
-                    }
-                    "%d:%02d".format(h12, minute)
-                }
+                val timeText = "%02d:%02d".format(hour, minute)
                 views.setTextViewText(R.id.tv_time, timeText)
 
-                // Weekday
-                views.setTextViewText(R.id.tv_weekday, SolarCalculator.weekdayFa(dayOfWeek))
-
-                // Dates
-                val jalaliText = SolarCalculator.formatJalaliFull(year, month, day)
-                val gregorianText = SolarCalculator.formatGregorianFa(year, month, day)
-                val jalaliShort = jalaliText.substringBeforeLast(" ")
-                val gregorianShort = gregorianText.substringBeforeLast(" ")
-                val datesText = when {
-                    showJalali && showGregorian -> "$jalaliShort · $gregorianShort"
-                    showJalali -> jalaliShort
-                    showGregorian -> gregorianShort
-                    else -> ""
+                // Try to show weather if available
+                val weather = try {
+                    WeatherData.read(context)
+                } catch (_: Exception) {
+                    null
                 }
-                views.setTextViewText(R.id.tv_dates, datesText)
 
-                // Solar
-                if (showSolar) {
-                    val today = SolarCalculator.solarDay(year, dayOfYear, lat, lon)
-                    val sunrise = SolarCalculator.formatTime(today.sunrise, use24h)
-                    val sunset = SolarCalculator.formatTime(today.sunset, use24h)
-                    views.setTextViewText(R.id.tv_solar, "$sunrise · $sunset")
-                    views.setViewVisibility(R.id.tv_solar, View.VISIBLE)
+                if (weather != null) {
+                    views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
+                    views.setTextViewText(R.id.tv_condition, weatherLabel(weather.code))
                 } else {
-                    views.setViewVisibility(R.id.tv_solar, View.GONE)
+                    views.setTextViewText(R.id.tv_temp, "--°")
+                    views.setTextViewText(R.id.tv_condition, "")
                 }
 
-                // Weather
-                var weather = WeatherData.read(context)
+                // Trigger background refresh (non-blocking)
                 try {
-                    val needForce = weather == null || weather.hourly.size < 3
-                    WeatherData.refreshIfNeeded(context, force = needForce)
-                    weather = WeatherData.read(context)
+                    WeatherData.refreshIfNeeded(context, force = false)
                 } catch (_: Exception) {}
 
-                if (showCurrentWeather && weather != null) {
-                    views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
-                    val condition = if (showFeels) {
-                        "${weatherLabel(weather.code)} · ${weather.feelsLike}°"
-                    } else {
-                        weatherLabel(weather.code)
-                    }
-                    views.setTextViewText(R.id.tv_condition, condition)
-
-                    if (weather.updatedAt > 0L) {
-                        val updatedCal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
-                        updatedCal.timeInMillis = weather.updatedAt
-                        val stamp = "%02d:%02d".format(
-                            updatedCal.get(Calendar.HOUR_OF_DAY),
-                            updatedCal.get(Calendar.MINUTE)
-                        )
-                        views.setTextViewText(R.id.tv_updated, "آخرین: $stamp")
-                    }
-                } else if (showCurrentWeather) {
-                    views.setTextViewText(R.id.tv_temp, "--°")
-                    views.setTextViewText(R.id.tv_condition, "دریافت هوا…")
-                }
-
-                // Hourly
-                if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val hourlyText = weather.hourly.take(6).joinToString(" ") { "${it.temperature}°" }
-                    views.setTextViewText(R.id.tv_hourly, hourlyText)
-                    views.setViewVisibility(R.id.tv_hourly_title, View.VISIBLE)
-                    views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
-                } else {
-                    views.setViewVisibility(R.id.tv_hourly_title, View.GONE)
-                    views.setViewVisibility(R.id.tv_hourly, View.GONE)
-                }
-
-                // Daily
-                if (showDaily && weather != null && weather.daily.isNotEmpty()) {
-                    val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
-                    val startDow = (dayOfWeek + 5) % 7
-                    val dailyText = weather.daily.take(3).mapIndexed { index, item ->
-                        val name = dayNames.getOrElse((startDow + index) % 7) { "·" }
-                        "$name ${item.max}/${item.min}"
-                    }.joinToString("  ")
-                    views.setTextViewText(R.id.tv_daily, dailyText)
-                    views.setViewVisibility(R.id.tv_daily_title, View.VISIBLE)
-                    views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
-                } else {
-                    views.setViewVisibility(R.id.tv_daily_title, View.GONE)
-                    views.setViewVisibility(R.id.tv_daily, View.GONE)
-                }
-
             } catch (e: Exception) {
-                Log.e(TAG, "update failed", e)
-                views.setTextViewText(R.id.tv_time, "خطا")
-                views.setTextViewText(R.id.tv_condition, "ویجت خطا داد")
+                Log.e(TAG, "update content", e)
+                views.setTextViewText(R.id.tv_time, "--:--")
+                views.setTextViewText(R.id.tv_temp, "--°")
+                views.setTextViewText(R.id.tv_condition, "خطا")
             }
 
-            // Click to refresh
+            // Click listener
             try {
-                val refreshIntent = Intent(context, ClockWidgetProvider::class.java)
-                    .setAction(ACTION_REFRESH)
-                val refreshPi = PendingIntent.getBroadcast(
-                    context, 1002, refreshIntent,
+                val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
+                val pi = PendingIntent.getBroadcast(
+                    context, 1002, intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                views.setOnClickPendingIntent(R.id.widget_root, refreshPi)
+                views.setOnClickPendingIntent(R.id.widget_root, pi)
             } catch (_: Exception) {}
 
             try {
                 manager.updateAppWidget(ids, views)
             } catch (e: Exception) {
-                Log.e(TAG, "updateAppWidget failed", e)
+                Log.e(TAG, "updateAppWidget", e)
             }
         }
 
@@ -251,7 +136,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             in 51..67, in 80..82 -> "باران"
             in 71..77, in 85..86 -> "برف"
             in 95..99 -> "رعد"
-            else -> "—"
+            else -> ""
         }
 
         private fun pendingIntent(context: Context): PendingIntent {
