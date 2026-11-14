@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -85,6 +86,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val showGregorian = p.getBoolean("show_gregorian", true)
                 val showSolar = p.getBoolean("show_solar", true)
                 val use24h = p.getBoolean("use_24h", true)
+                val backgroundAlpha = p.getFloat("background_alpha", 100f).coerceIn(0f, 100f)
 
                 val lat = p.getString("location_lat", null)?.toDoubleOrNull() ?: SolarCalculator.LATITUDE
                 val lon = p.getString("location_lon", null)?.toDoubleOrNull() ?: SolarCalculator.LONGITUDE
@@ -97,6 +99,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val hour = cal.get(Calendar.HOUR_OF_DAY)
                 val minute = cal.get(Calendar.MINUTE)
                 val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+
+                // Apply background transparency
+                // Base color is #0B0F17 → RGB(11, 15, 23)
+                val alpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
+                val bgColor = Color.argb(alpha, 11, 15, 23)
+                views.setInt(R.id.widget_root, "setBackgroundColor", bgColor)
 
                 // Time
                 val timeText = if (use24h) {
