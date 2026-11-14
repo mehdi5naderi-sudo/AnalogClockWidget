@@ -4,65 +4,57 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="#0B0F17"
-    android:padding="10dp">
+    android:background="#FF0B0F17"
+    android:padding="8dp">
 
-    <!-- ==================== LEFT: Clock + Date + Solar ==================== -->
+    <!-- LEFT: Clock + Date + Solar -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1.15"
+        android:layout_weight="1.2"
         android:orientation="vertical"
         android:gravity="center_vertical">
 
-        <!-- Big Clock -->
         <TextView
             android:id="@+id/tv_time"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="14:32"
-            android:textColor="#F3F5F7"
-            android:textSize="42sp"
+            android:textColor="#FFF3F5F7"
+            android:textSize="40sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif"
             android:includeFontPadding="false"
             android:maxLines="1" />
 
-        <!-- Weekday -->
         <TextView
             android:id="@+id/tv_weekday"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="شنبه"
-            android:textColor="#F3F5F7"
-            android:textSize="15sp"
-            android:fontFamily="sans-serif-medium"
+            android:textColor="#FFF3F5F7"
+            android:textSize="14sp"
             android:maxLines="1" />
 
-        <!-- Dates (Jalali + Gregorian) -->
         <TextView
             android:id="@+id/tv_dates"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="۲۳ آبان  ·  ۱۴ نوامبر"
-            android:textColor="#8B9AAB"
-            android:textSize="13sp"
-            android:fontFamily="sans-serif-medium"
+            android:text="۲۳ آبان · ۱۴ نوامبر"
+            android:textColor="#FF8B9AAB"
+            android:textSize="12sp"
             android:maxLines="1" />
 
-        <!-- Sunrise / Sunset -->
         <TextView
             android:id="@+id/tv_solar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="۰۶:۴۰  ·  ۱۷:۰۰"
-            android:textColor="#FFC857"
-            android:textSize="13sp"
+            android:text="۰۶:۴۰ · ۱۷:۰۰"
+            android:textColor="#FFFFC857"
+            android:textSize="12sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif"
             android:maxLines="1" />
 
     </LinearLayout>
@@ -71,14 +63,15 @@
     <View
         android:layout_width="1dp"
         android:layout_height="match_parent"
-        android:layout_marginHorizontal="8dp"
-        android:background="#2A3548" />
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:background="#FF2A3548" />
 
-    <!-- ==================== CENTER: Current Weather ==================== -->
+    <!-- CENTER: Current Weather -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="0.85"
+        android:layout_weight="0.9"
         android:orientation="vertical"
         android:gravity="center_vertical">
 
@@ -87,10 +80,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="۱۶°"
-            android:textColor="#FFC857"
-            android:textSize="36sp"
+            android:textColor="#FFFFC857"
+            android:textSize="34sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif"
             android:includeFontPadding="false"
             android:maxLines="1" />
 
@@ -99,21 +91,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="صاف  ·  ۱۳°"
-            android:textColor="#8B9AAB"
-            android:textSize="13sp"
-            android:fontFamily="sans-serif-medium"
+            android:text="صاف · ۱۳°"
+            android:textColor="#FF8B9AAB"
+            android:textSize="12sp"
             android:maxLines="1" />
 
         <TextView
             android:id="@+id/tv_updated"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="آخرین به‌روزرسانی: --:--"
-            android:textColor="#5A6A7A"
-            android:textSize="11sp"
-            android:fontFamily="sans-serif"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textColor="#FF5A6A7A"
+            android:textSize="10sp"
             android:maxLines="1" />
 
     </LinearLayout>
@@ -122,10 +112,11 @@
     <View
         android:layout_width="1dp"
         android:layout_height="match_parent"
-        android:layout_marginHorizontal="8dp"
-        android:background="#2A3548" />
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:background="#FF2A3548" />
 
-    <!-- ==================== RIGHT: Forecast ==================== -->
+    <!-- RIGHT: Forecast -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
@@ -133,15 +124,13 @@
         android:orientation="vertical"
         android:gravity="center_vertical">
 
-        <!-- Hourly title -->
         <TextView
             android:id="@+id/tv_hourly_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="ساعتی"
-            android:textColor="#8B9AAB"
-            android:textSize="11sp"
-            android:fontFamily="sans-serif-medium"
+            android:textColor="#FF8B9AAB"
+            android:textSize="10sp"
             android:maxLines="1" />
 
         <TextView
@@ -149,23 +138,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="۱۴°  ۱۵°  ۱۶°  ۱۷°  ۱۸°  ۱۹°"
-            android:textColor="#F3F5F7"
-            android:textSize="12sp"
-            android:fontFamily="sans-serif-medium"
-            android:maxLines="2"
-            android:lineSpacingExtra="2dp" />
+            android:text="۱۴° ۱۵° ۱۶° ۱۷° ۱۸° ۱۹°"
+            android:textColor="#FFF3F5F7"
+            android:textSize="11sp"
+            android:maxLines="2" />
 
-        <!-- Daily title -->
         <TextView
             android:id="@+id/tv_daily_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="روزانه"
-            android:textColor="#8B9AAB"
-            android:textSize="11sp"
-            android:fontFamily="sans-serif-medium"
+            android:textColor="#FF8B9AAB"
+            android:textSize="10sp"
             android:maxLines="1" />
 
         <TextView
@@ -174,11 +159,9 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:text="ش ۱۷/۶  ی ۱۷/۵  د ۱۶/۵"
-            android:textColor="#F3F5F7"
-            android:textSize="12sp"
-            android:fontFamily="sans-serif-medium"
-            android:maxLines="2"
-            android:lineSpacingExtra="2dp" />
+            android:textColor="#FFF3F5F7"
+            android:textSize="11sp"
+            android:maxLines="2" />
 
     </LinearLayout>
 
