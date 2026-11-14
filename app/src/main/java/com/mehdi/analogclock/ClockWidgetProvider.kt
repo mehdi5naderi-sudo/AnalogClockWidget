@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.RemoteViews
 import java.util.Calendar
 import java.util.TimeZone
@@ -56,6 +57,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val TAG = "ClockWidget"
         private const val ACTION_TICK = "com.mehdi.analogclock.TICK"
         private const val ACTION_REFRESH = "com.mehdi.analogclock.REFRESH"
+        private const val PREFS = "clock_widget_prefs"
 
         private fun refreshAll(context: Context) {
             try {
@@ -78,19 +80,39 @@ class ClockWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_clock)
 
             try {
-                val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tehran"))
+                val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val showJalali = p.getBoolean("show_jalali", true)
+                val showGregorian = p.getBoolean("show_gregorian", true)
+                val showSolar = p.getBoolean("show_solar", true)
+                val use24h = p.getBoolean("use_24h", true)
+
+                val lat = p.getString("location_lat", null)?.toDoubleOrNull() ?: SolarCalculator.LATITUDE
+                val lon = p.getString("location_lon", null)?.toDoubleOrNull() ?: SolarCalculator.LONGITUDE
+
+                val cal = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
+                val year = cal.get(Calendar.YEAR)
+                val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+                val month = cal.get(Calendar.MONTH) + 1
+                val day = cal.get(Calendar.DAY_OF_MONTH)
                 val hour = cal.get(Calendar.HOUR_OF_DAY)
                 val minute = cal.get(Calendar.MINUTE)
-                val timeText = "%02d:%02d".format(hour, minute)
+                val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+
+                // Time
+                val timeText = if (use24h) {
+                    "%02d:%02d".format(hour, minute)
+                } else {
+                    val h12 = when {
+                        hour == 0 -> 12
+                        hour > 12 -> hour - 12
+                        else -> hour
+                    }
+                    "%d:%02d".format(h12, minute)
+                }
                 views.setTextViewText(R.id.tv_time, timeText)
 
-                // Try to show weather if available
-                val weather = try {
-                    WeatherData.read(context)
-                } catch (_: Exception) {
-                    null
-                }
-
+                // Weather
+                val weather = try { WeatherData.read(context) } catch (_: Exception) { null }
                 if (weather != null) {
                     views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
                     views.setTextViewText(R.id.tv_condition, weatherLabel(weather.code))
@@ -99,19 +121,48 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_condition, "")
                 }
 
-                // Trigger background refresh (non-blocking)
-                try {
-                    WeatherData.refreshIfNeeded(context, force = false)
-                } catch (_: Exception) {}
+                // Trigger background refresh
+                try { WeatherData.refreshIfNeeded(context, force = false) } catch (_: Exception) {}
+
+                // Dates + Weekday
+                val weekday = SolarCalculator.weekdayFa(dayOfWeek)
+                val jalaliText = SolarCalculator.formatJalaliFull(year, month, day)
+                val gregorianText = SolarCalculator.formatGregorianFa(year, month, day)
+                val jalaliShort = jalaliText.substringBeforeLast(" ")
+                val gregorianShort = gregorianText.substringBeforeLast(" ")
+
+                val datesText = buildString {
+                    append(weekday)
+                    if (showJalali || showGregorian) append("  ·  ")
+                    when {
+                        showJalali && showGregorian -> append("$jalaliShort  $gregorianShort")
+                        showJalali -> append(jalaliShort)
+                        showGregorian -> append(gregorianShort)
+                    }
+                }
+                views.setTextViewText(R.id.tv_dates, datesText)
+
+                // Sunrise / Sunset
+                if (showSolar) {
+                    val today = SolarCalculator.solarDay(year, dayOfYear, lat, lon)
+                    val sunrise = SolarCalculator.formatTime(today.sunrise, use24h)
+                    val sunset = SolarCalculator.formatTime(today.sunset, use24h)
+                    views.setTextViewText(R.id.tv_solar, "$sunrise  ·  $sunset")
+                    views.setViewVisibility(R.id.tv_solar, View.VISIBLE)
+                } else {
+                    views.setViewVisibility(R.id.tv_solar, View.GONE)
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "update content", e)
                 views.setTextViewText(R.id.tv_time, "--:--")
                 views.setTextViewText(R.id.tv_temp, "--°")
                 views.setTextViewText(R.id.tv_condition, "خطا")
+                views.setTextViewText(R.id.tv_dates, "")
+                views.setTextViewText(R.id.tv_solar, "")
             }
 
-            // Click listener
+            // Click to refresh
             try {
                 val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
                 val pi = PendingIntent.getBroadcast(
