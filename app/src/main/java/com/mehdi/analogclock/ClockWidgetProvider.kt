@@ -85,6 +85,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val showJalali = p.getBoolean("show_jalali", true)
                 val showGregorian = p.getBoolean("show_gregorian", true)
                 val showSolar = p.getBoolean("show_solar", true)
+                val showHourly = p.getBoolean("show_hourly", true)
+                val showDaily = p.getBoolean("show_daily", true)
                 val use24h = p.getBoolean("use_24h", true)
                 val backgroundAlpha = p.getFloat("background_alpha", 100f).coerceIn(0f, 100f)
 
@@ -158,6 +160,29 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
+                // Hourly forecast
+                if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
+                    val hourlyText = "ساعتی: " + weather.hourly.take(6).joinToString(" ") { "${it.temperature}°" }
+                    views.setTextViewText(R.id.tv_hourly, hourlyText)
+                    views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
+                } else {
+                    views.setViewVisibility(R.id.tv_hourly, View.GONE)
+                }
+
+                // Daily forecast
+                if (showDaily && weather != null && weather.daily.isNotEmpty()) {
+                    val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
+                    val startDow = (dayOfWeek + 5) % 7
+                    val dailyText = "روزانه: " + weather.daily.take(3).mapIndexed { index, item ->
+                        val name = dayNames.getOrElse((startDow + index) % 7) { "·" }
+                        "$name ${item.max}/${item.min}"
+                    }.joinToString("  ")
+                    views.setTextViewText(R.id.tv_daily, dailyText)
+                    views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
+                } else {
+                    views.setViewVisibility(R.id.tv_daily, View.GONE)
+                }
+
             } catch (e: Exception) {
                 Log.e(TAG, "update content", e)
                 views.setTextViewText(R.id.tv_time, "--:--")
@@ -165,6 +190,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_condition, "خطا")
                 views.setTextViewText(R.id.tv_dates, "")
                 views.setTextViewText(R.id.tv_solar, "")
+                views.setTextViewText(R.id.tv_hourly, "")
+                views.setTextViewText(R.id.tv_daily, "")
             }
 
             // Click to refresh

@@ -57,4 +57,24 @@
         android:textSize="12sp"
         android:textStyle="bold" />
 
+    <!-- Hourly -->
+    <TextView
+        android:id="@+id/tv_hourly"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text=""
+        android:textColor="#FFDDDDDD"
+        android:textSize="11sp" />
+
+    <!-- Daily -->
+    <TextView
+        android:id="@+id/tv_daily"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:text=""
+        android:textColor="#FFDDDDDD"
+        android:textSize="11sp" />
+
 </LinearLayout>
