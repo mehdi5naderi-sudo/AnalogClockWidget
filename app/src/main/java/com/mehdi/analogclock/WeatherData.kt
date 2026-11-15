@@ -16,7 +16,8 @@ object WeatherData {
     private const val PREFS = "clock_widget_prefs"
     private const val KEY_UPDATED = "weather_updated_at"
     private const val KEY_ATTEMPT = "weather_attempt_at"
-    private const val KEY_JSON = "weather_compact_v2"
+    private const val KEY_JSON = "weather_compact_v3"
+    private const val KEY_JSON_V2 = "weather_compact_v2"
     private const val KEY_JSON_V1 = "weather_compact"
     private const val KEY_JSON_LEGACY = "weather_json"
     private val fetching = AtomicBoolean(false)
@@ -43,6 +44,8 @@ object WeatherData {
         val max: Int,
         val min: Int,
         val rain: Int,
+        val windSpeed: Int,      // km/h
+        val visibility: Int,     // meters
         val hourly: List<HourlyItem>,
         val daily: List<DailyItem>,
         val updatedAt: Long
@@ -56,6 +59,7 @@ object WeatherData {
         if (!isEnabled(context)) return null
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = p.getString(KEY_JSON, null)
+            ?: p.getString(KEY_JSON_V2, null)
             ?: p.getString(KEY_JSON_V1, null)
             ?: p.getString(KEY_JSON_LEGACY, null)
             ?: return null
@@ -114,19 +118,17 @@ object WeatherData {
             max = root.optInt("x", root.optInt("t", 0)),
             min = root.optInt("n", root.optInt("t", 0)),
             rain = root.optInt("r", 0),
+            windSpeed = root.optInt("w", 0),
+            visibility = root.optInt("v", 0),
             hourly = hourly,
             daily = daily,
             updatedAt = updatedAt
         )
     }
 
-    /**
-     * Build hourly list: find first index with time >= current hour (Tehran),
-     * then take the next [count] consecutive slots. Never skip holes.
-     */
     private fun extractHourly(
         hourly: JSONObject?,
-        count: Int = 12,
+        count: Int = 6,
         referenceTime: String
     ): List<HourlyItem> {
         if (hourly == null) return emptyList()
@@ -137,8 +139,6 @@ object WeatherData {
         val n = minOf(times.length(), temps.length())
         if (n == 0) return emptyList()
 
-        // Use Open-Meteo's own current.time so the reference and hourly
-        // timestamps always share exactly the same timezone and clock.
         val nowFloor = referenceTime.take(13).let { value ->
             if (value.length == 13 && value[10] == 'T') "$value:00"
             else {
@@ -159,9 +159,8 @@ object WeatherData {
                 start = i
                 break
             }
-            start = i // if all past, last index; loop below still fills what it can
+            start = i
         }
-        // If every timestamp is still in the past, start from 0 to show something
         if (times.optString(n - 1, "") < nowFloor) {
             start = maxOf(0, n - count)
         }
@@ -170,9 +169,7 @@ object WeatherData {
         var i = start
         while (i < n && result.size < count) {
             val t = times.optString(i, "")
-            val hourPart = t.substringAfter('T', "")
-                .substringBefore(':')
-                .toIntOrNull()
+            val hourPart = t.substringAfter('T', "").substringBefore(':').toIntOrNull()
             val temp = temps.optDouble(i, Double.NaN)
             if (hourPart != null && !temp.isNaN()) {
                 result.add(
@@ -222,6 +219,9 @@ object WeatherData {
         val dailyList = extractDaily(daily)
 
         val temp = current.getDouble("temperature_2m").toInt()
+        val wind = current.optDouble("wind_speed_10m", 0.0).toInt()
+        val vis = current.optDouble("visibility", 0.0).toInt()
+
         return Snapshot(
             temperature = temp,
             feelsLike = current.optDouble("apparent_temperature", temp.toDouble()).toInt(),
@@ -229,6 +229,8 @@ object WeatherData {
             max = dailyList.firstOrNull()?.max ?: temp,
             min = dailyList.firstOrNull()?.min ?: temp,
             rain = dailyList.firstOrNull()?.rainProb ?: 0,
+            windSpeed = wind,
+            visibility = vis,
             hourly = hourlyList,
             daily = dailyList,
             updatedAt = updatedAt
@@ -243,6 +245,8 @@ object WeatherData {
         root.put("x", snapshot.max)
         root.put("n", snapshot.min)
         root.put("r", snapshot.rain)
+        root.put("w", snapshot.windSpeed)
+        root.put("v", snapshot.visibility)
         val hArr = JSONArray()
         for (item in snapshot.hourly) {
             hArr.put(
@@ -269,22 +273,12 @@ object WeatherData {
         return root.toString()
     }
 
-    fun weatherIcon(code: Int): String = when (code) {
-        0 -> "☀"
-        1, 2 -> "🌤"
-        3 -> "☁"
-        45, 48 -> "🌫"
-        in 51..67, in 80..82 -> "🌧"
-        in 71..77, in 85..86 -> "❄"
-        in 95..99 -> "⛈"
-        else -> "☀"
-    }
-
     fun invalidate(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putLong(KEY_UPDATED, 0L)
             .putLong(KEY_ATTEMPT, 0L)
             .remove(KEY_JSON)
+            .remove(KEY_JSON_V2)
             .remove(KEY_JSON_V1)
             .remove(KEY_JSON_LEGACY)
             .commit()
@@ -324,7 +318,7 @@ object WeatherData {
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast" +
                         "?latitude=$lat&longitude=$lon" +
-                        "&current=temperature_2m,apparent_temperature,weather_code,precipitation" +
+                        "&current=temperature_2m,apparent_temperature,weather_code,precipitation,wind_speed_10m,visibility" +
                         "&hourly=temperature_2m,weather_code,precipitation_probability" +
                         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
                         "&forecast_days=3&timezone=${tz.replace("/", "%2F")}"
@@ -334,7 +328,7 @@ object WeatherData {
                     connectTimeout = 15000
                     readTimeout = 15000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "SolarClockWidget/2.2")
+                    setRequestProperty("User-Agent", "SolarClockWidget/2.3")
                 }
                 try {
                     val code = connection.responseCode
@@ -344,7 +338,6 @@ object WeatherData {
                     val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                     val full = JSONObject(body)
                     val snapshot = parseOpenMeteo(full, System.currentTimeMillis(), tz)
-                    // Guard: never store a nearly-empty hourly list as "success"
                     if (snapshot.hourly.size < 3) {
                         throw IllegalStateException("Hourly parse too short: ${snapshot.hourly.size}")
                     }
@@ -352,6 +345,7 @@ object WeatherData {
 
                     p.edit()
                         .putString(KEY_JSON, compact)
+                        .remove(KEY_JSON_V2)
                         .remove(KEY_JSON_V1)
                         .remove(KEY_JSON_LEGACY)
                         .putLong(KEY_UPDATED, System.currentTimeMillis())
