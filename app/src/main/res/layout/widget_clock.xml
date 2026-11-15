@@ -4,17 +4,21 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
+    android:gravity="center_vertical"
     android:background="#FF0B0F17"
-    android:padding="10dp">
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
 
     <TextView
         android:id="@+id/tv_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
         android:text="--:--"
         android:textColor="#FFFFFFFF"
-        android:textSize="36sp"
+        android:textSize="28sp"
         android:textStyle="bold"
         android:includeFontPadding="false" />
 
@@ -22,10 +26,11 @@
         android:id="@+id/tv_temp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="1dp"
         android:text="--°"
         android:textColor="#FFFFC857"
-        android:textSize="22sp"
+        android:textSize="18sp"
         android:textStyle="bold"
         android:includeFontPadding="false" />
 
@@ -33,48 +38,55 @@
         android:id="@+id/tv_condition"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_gravity="center_horizontal"
         android:text=""
         android:textColor="#FFAAAAAA"
-        android:textSize="13sp" />
+        android:textSize="11sp"
+        android:includeFontPadding="false" />
 
     <TextView
         android:id="@+id/tv_dates"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="3dp"
         android:text=""
         android:textColor="#FFCCCCCC"
-        android:textSize="12sp" />
+        android:textSize="11sp"
+        android:includeFontPadding="false" />
 
     <TextView
         android:id="@+id/tv_solar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="1dp"
         android:text=""
         android:textColor="#FFFFC857"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:includeFontPadding="false" />
 
-    <!-- Hourly -->
     <TextView
         android:id="@+id/tv_hourly"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="3dp"
         android:text=""
         android:textColor="#FFDDDDDD"
-        android:textSize="11sp" />
+        android:textSize="10sp"
+        android:includeFontPadding="false" />
 
-    <!-- Daily -->
     <TextView
         android:id="@+id/tv_daily"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="1dp"
         android:text=""
         android:textColor="#FFDDDDDD"
-        android:textSize="11sp" />
+        android:textSize="10sp"
+        android:includeFontPadding="false" />
 
 </LinearLayout>
