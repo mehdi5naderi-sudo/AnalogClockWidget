@@ -11,15 +11,19 @@ import java.util.Calendar
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Open-Meteo client: current, hourly and daily forecasts. */
+/**
+ * Weather sources:
+ * - METAR (OIII/OIIE): real temp, visibility, wind
+ * - Open-Meteo forecast: hourly + daily
+ * - Open-Meteo Air Quality: us_aqi
+ */
 object WeatherData {
     private const val PREFS = "clock_widget_prefs"
     private const val KEY_UPDATED = "weather_updated_at"
     private const val KEY_ATTEMPT = "weather_attempt_at"
-    private const val KEY_JSON = "weather_compact_v3"
+    private const val KEY_JSON = "weather_compact_v4"
+    private const val KEY_JSON_V3 = "weather_compact_v3"
     private const val KEY_JSON_V2 = "weather_compact_v2"
-    private const val KEY_JSON_V1 = "weather_compact"
-    private const val KEY_JSON_LEGACY = "weather_json"
     private val fetching = AtomicBoolean(false)
 
     data class HourlyItem(
@@ -44,8 +48,9 @@ object WeatherData {
         val max: Int,
         val min: Int,
         val rain: Int,
-        val windSpeed: Int,      // km/h
-        val visibility: Int,     // meters
+        val windSpeed: Int,      // km/h from METAR
+        val visibility: Int,     // meters from METAR
+        val usAqi: Int,          // from Open-Meteo AQ
         val hourly: List<HourlyItem>,
         val daily: List<DailyItem>,
         val updatedAt: Long
@@ -59,23 +64,13 @@ object WeatherData {
         if (!isEnabled(context)) return null
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = p.getString(KEY_JSON, null)
+            ?: p.getString(KEY_JSON_V3, null)
             ?: p.getString(KEY_JSON_V2, null)
-            ?: p.getString(KEY_JSON_V1, null)
-            ?: p.getString(KEY_JSON_LEGACY, null)
             ?: return null
         return try {
-            parseStored(raw, p.getLong(KEY_UPDATED, 0L))
+            parseCompact(JSONObject(raw), p.getLong(KEY_UPDATED, 0L))
         } catch (_: Exception) {
             null
-        }
-    }
-
-    private fun parseStored(raw: String, updatedAt: Long): Snapshot {
-        val root = JSONObject(raw)
-        return if (root.has("t") && !root.has("current")) {
-            parseCompact(root, updatedAt)
-        } else {
-            parseOpenMeteo(root, updatedAt)
         }
     }
 
@@ -120,10 +115,160 @@ object WeatherData {
             rain = root.optInt("r", 0),
             windSpeed = root.optInt("w", 0),
             visibility = root.optInt("v", 0),
+            usAqi = root.optInt("aqi", -1),
             hourly = hourly,
             daily = daily,
             updatedAt = updatedAt
         )
+    }
+
+    private fun toCompact(snapshot: Snapshot): String {
+        val root = JSONObject()
+        root.put("t", snapshot.temperature)
+        root.put("f", snapshot.feelsLike)
+        root.put("c", snapshot.code)
+        root.put("x", snapshot.max)
+        root.put("n", snapshot.min)
+        root.put("r", snapshot.rain)
+        root.put("w", snapshot.windSpeed)
+        root.put("v", snapshot.visibility)
+        root.put("aqi", snapshot.usAqi)
+        val hArr = JSONArray()
+        for (item in snapshot.hourly) {
+            hArr.put(
+                JSONObject()
+                    .put("hr", item.hour)
+                    .put("t", item.temperature)
+                    .put("c", item.code)
+                    .put("r", item.rainProb)
+            )
+        }
+        root.put("h", hArr)
+        val dArr = JSONArray()
+        for (item in snapshot.daily) {
+            dArr.put(
+                JSONObject()
+                    .put("i", item.dayIndex)
+                    .put("c", item.code)
+                    .put("x", item.max)
+                    .put("n", item.min)
+                    .put("r", item.rainProb)
+            )
+        }
+        root.put("d", dArr)
+        return root.toString()
+    }
+
+    fun invalidate(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_UPDATED, 0L)
+            .putLong(KEY_ATTEMPT, 0L)
+            .remove(KEY_JSON)
+            .remove(KEY_JSON_V3)
+            .remove(KEY_JSON_V2)
+            .commit()
+    }
+
+    // ---------- METAR helpers ----------
+
+    private data class MetarObs(
+        val temp: Int?,
+        val windKt: Int?,
+        val visM: Int?,
+        val code: Int?
+    )
+
+    private fun fetchMetar(): MetarObs? {
+        // Prefer Mehrabad (OIII), fallback Imam Khomeini (OIIE)
+        val url = URL("https://aviationweather.gov/api/data/metar?ids=OIII,OIIE&format=json&taf=false")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12000
+            readTimeout = 12000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "SolarClockWidget/2.4")
+        }
+        try {
+            if (conn.responseCode !in 200..299) return null
+            val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val arr = JSONArray(body)
+            if (arr.length() == 0) return null
+
+            // Prefer OIII if present
+            var chosen: JSONObject? = null
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                if (o.optString("icaoId") == "OIII") {
+                    chosen = o
+                    break
+                }
+                if (chosen == null) chosen = o
+            }
+            chosen ?: return null
+
+            val temp = if (chosen.has("temp")) chosen.optDouble("temp").toInt() else null
+            val windKt = if (chosen.has("wspd")) chosen.optInt("wspd") else null
+
+            // visibility: number in statute miles, or "6+", or from raw
+            var visM: Int? = null
+            val visib = chosen.opt("visib")
+            when (visib) {
+                is Number -> {
+                    val sm = visib.toDouble()
+                    visM = (sm * 1609.34).toInt() // statute miles → meters
+                }
+                is String -> {
+                    if (visib == "6+" || visib.equals("CAVOK", true)) {
+                        visM = 10000
+                    } else {
+                        visib.toDoubleOrNull()?.let { visM = (it * 1609.34).toInt() }
+                    }
+                }
+            }
+            // Also try parse from raw METAR (e.g. "4000")
+            if (visM == null) {
+                val raw = chosen.optString("rawOb", "")
+                val m = Regex("\\b(\\d{4})\\b").find(raw)
+                if (m != null) visM = m.groupValues[1].toIntOrNull()
+            }
+
+            val wx = chosen.optString("wxString", "")
+            val code = when {
+                wx.contains("RA") || wx.contains("SHRA") -> 61
+                wx.contains("SN") -> 71
+                wx.contains("FG") || wx.contains("BR") -> 45
+                wx.contains("HZ") || wx.contains("FU") || wx.contains("DU") -> 45
+                wx.contains("TS") -> 95
+                else -> 0
+            }
+
+            return MetarObs(temp, windKt, visM, code)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun fetchUsAqi(lat: Double, lon: Double): Int {
+        val url = URL(
+            "https://air-quality-api.open-meteo.com/v1/air-quality" +
+                "?latitude=$lat&longitude=$lon&current=us_aqi"
+        )
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12000
+            readTimeout = 12000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "SolarClockWidget/2.4")
+        }
+        try {
+            if (conn.responseCode !in 200..299) return -1
+            val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = JSONObject(body)
+            val current = root.optJSONObject("current") ?: return -1
+            return current.optInt("us_aqi", -1)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun extractHourly(
@@ -206,84 +351,6 @@ object WeatherData {
         return list
     }
 
-    private fun parseOpenMeteo(
-        root: JSONObject,
-        updatedAt: Long,
-        timeZone: String = SolarCalculator.TIME_ZONE
-    ): Snapshot {
-        val current = root.getJSONObject("current")
-        val daily = root.getJSONObject("daily")
-        val hourlyObj = root.optJSONObject("hourly")
-
-        val hourlyList = extractHourly(hourlyObj, 6, current.optString("time", ""))
-        val dailyList = extractDaily(daily)
-
-        val temp = current.getDouble("temperature_2m").toInt()
-        val wind = current.optDouble("wind_speed_10m", 0.0).toInt()
-        val vis = current.optDouble("visibility", 0.0).toInt()
-
-        return Snapshot(
-            temperature = temp,
-            feelsLike = current.optDouble("apparent_temperature", temp.toDouble()).toInt(),
-            code = current.optInt("weather_code", 0),
-            max = dailyList.firstOrNull()?.max ?: temp,
-            min = dailyList.firstOrNull()?.min ?: temp,
-            rain = dailyList.firstOrNull()?.rainProb ?: 0,
-            windSpeed = wind,
-            visibility = vis,
-            hourly = hourlyList,
-            daily = dailyList,
-            updatedAt = updatedAt
-        )
-    }
-
-    private fun toCompact(snapshot: Snapshot): String {
-        val root = JSONObject()
-        root.put("t", snapshot.temperature)
-        root.put("f", snapshot.feelsLike)
-        root.put("c", snapshot.code)
-        root.put("x", snapshot.max)
-        root.put("n", snapshot.min)
-        root.put("r", snapshot.rain)
-        root.put("w", snapshot.windSpeed)
-        root.put("v", snapshot.visibility)
-        val hArr = JSONArray()
-        for (item in snapshot.hourly) {
-            hArr.put(
-                JSONObject()
-                    .put("hr", item.hour)
-                    .put("t", item.temperature)
-                    .put("c", item.code)
-                    .put("r", item.rainProb)
-            )
-        }
-        root.put("h", hArr)
-        val dArr = JSONArray()
-        for (item in snapshot.daily) {
-            dArr.put(
-                JSONObject()
-                    .put("i", item.dayIndex)
-                    .put("c", item.code)
-                    .put("x", item.max)
-                    .put("n", item.min)
-                    .put("r", item.rainProb)
-            )
-        }
-        root.put("d", dArr)
-        return root.toString()
-    }
-
-    fun invalidate(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(KEY_UPDATED, 0L)
-            .putLong(KEY_ATTEMPT, 0L)
-            .remove(KEY_JSON)
-            .remove(KEY_JSON_V2)
-            .remove(KEY_JSON_V1)
-            .remove(KEY_JSON_LEGACY)
-            .commit()
-    }
-
     fun refreshIfNeeded(context: Context, force: Boolean = false) {
         if (!isEnabled(context)) return
         if (!fetching.compareAndSet(false, true)) return
@@ -315,58 +382,113 @@ object WeatherData {
 
         Thread {
             try {
-                val url = URL(
+                // 1) Open-Meteo forecast (hourly + daily + fallback current)
+                val forecastUrl = URL(
                     "https://api.open-meteo.com/v1/forecast" +
                         "?latitude=$lat&longitude=$lon" +
-                        "&current=temperature_2m,apparent_temperature,weather_code,precipitation,wind_speed_10m,visibility" +
+                        "&current=temperature_2m,apparent_temperature,weather_code" +
                         "&hourly=temperature_2m,weather_code,precipitation_probability" +
                         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
                         "&forecast_days=3&timezone=${tz.replace("/", "%2F")}"
                 )
-                val connection = (url.openConnection() as HttpURLConnection).apply {
+                val fConn = (forecastUrl.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 15000
                     readTimeout = 15000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "SolarClockWidget/2.3")
+                    setRequestProperty("User-Agent", "SolarClockWidget/2.4")
                 }
+
+                var temperature = 0
+                var feelsLike = 0
+                var code = 0
+                var hourlyList = emptyList<HourlyItem>()
+                var dailyList = emptyList<DailyItem>()
+
                 try {
-                    val code = connection.responseCode
-                    if (code !in 200..299) {
-                        throw IllegalStateException("Open-Meteo HTTP $code")
-                    }
-                    val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    val full = JSONObject(body)
-                    val snapshot = parseOpenMeteo(full, System.currentTimeMillis(), tz)
-                    if (snapshot.hourly.size < 3) {
-                        throw IllegalStateException("Hourly parse too short: ${snapshot.hourly.size}")
-                    }
-                    val compact = toCompact(snapshot)
-
-                    p.edit()
-                        .putString(KEY_JSON, compact)
-                        .remove(KEY_JSON_V2)
-                        .remove(KEY_JSON_V1)
-                        .remove(KEY_JSON_LEGACY)
-                        .putLong(KEY_UPDATED, System.currentTimeMillis())
-                        .commit()
-
-                    val manager = AppWidgetManager.getInstance(appContext)
-                    val ids = manager.getAppWidgetIds(
-                        ComponentName(appContext, ClockWidgetProvider::class.java)
-                    )
-                    if (ids.isNotEmpty()) {
-                        ClockWidgetProvider.update(appContext, manager, ids)
+                    if (fConn.responseCode in 200..299) {
+                        val body = fConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                        val root = JSONObject(body)
+                        val current = root.getJSONObject("current")
+                        val daily = root.getJSONObject("daily")
+                        temperature = current.getDouble("temperature_2m").toInt()
+                        feelsLike = current.optDouble("apparent_temperature", temperature.toDouble()).toInt()
+                        code = current.optInt("weather_code", 0)
+                        hourlyList = extractHourly(root.optJSONObject("hourly"), 6, current.optString("time", ""))
+                        dailyList = extractDaily(daily)
                     }
                 } finally {
-                    connection.disconnect()
+                    fConn.disconnect()
+                }
+
+                // 2) METAR for real temp / wind / visibility
+                var windKmh = 0
+                var visibilityM = 0
+                try {
+                    val metar = fetchMetar()
+                    if (metar != null) {
+                        if (metar.temp != null) {
+                            temperature = metar.temp
+                            feelsLike = metar.temp // no feels-like in METAR
+                        }
+                        if (metar.windKt != null) {
+                            windKmh = (metar.windKt * 1.852).toInt() // kt → km/h
+                        }
+                        if (metar.visM != null) {
+                            visibilityM = metar.visM
+                        }
+                        if (metar.code != null && metar.code != 0) {
+                            code = metar.code
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                // 3) US AQI from Open-Meteo Air Quality
+                var usAqi = -1
+                try {
+                    usAqi = fetchUsAqi(lat, lon)
+                } catch (_: Exception) {}
+
+                if (hourlyList.size < 3 && dailyList.isEmpty()) {
+                    // almost nothing useful
+                    return@Thread
+                }
+
+                val snapshot = Snapshot(
+                    temperature = temperature,
+                    feelsLike = feelsLike,
+                    code = code,
+                    max = dailyList.firstOrNull()?.max ?: temperature,
+                    min = dailyList.firstOrNull()?.min ?: temperature,
+                    rain = dailyList.firstOrNull()?.rainProb ?: 0,
+                    windSpeed = windKmh,
+                    visibility = visibilityM,
+                    usAqi = usAqi,
+                    hourly = hourlyList,
+                    daily = dailyList,
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                p.edit()
+                    .putString(KEY_JSON, toCompact(snapshot))
+                    .remove(KEY_JSON_V3)
+                    .remove(KEY_JSON_V2)
+                    .putLong(KEY_UPDATED, System.currentTimeMillis())
+                    .commit()
+
+                val manager = AppWidgetManager.getInstance(appContext)
+                val ids = manager.getAppWidgetIds(
+                    ComponentName(appContext, ClockWidgetProvider::class.java)
+                )
+                if (ids.isNotEmpty()) {
+                    ClockWidgetProvider.update(appContext, manager, ids)
                 }
             } catch (_: Exception) {
             } finally {
                 fetching.set(false)
             }
         }.apply {
-            name = "OpenMeteoWeather"
+            name = "WeatherFetch"
             isDaemon = true
             start()
         }
