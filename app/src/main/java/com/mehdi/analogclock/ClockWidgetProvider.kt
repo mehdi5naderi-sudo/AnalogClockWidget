@@ -136,18 +136,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 if (weather != null) {
                     views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
 
-                    // condition + wind + visibility
+                    // condition · wind · visibility · AQI
                     val parts = mutableListOf<String>()
                     val label = weatherLabel(weather.code)
                     if (label.isNotEmpty()) parts.add(label)
                     if (weather.windSpeed > 0) parts.add("${weather.windSpeed}km/h")
                     if (weather.visibility > 0) {
-                        val visKm = if (weather.visibility >= 1000)
-                            "${weather.visibility / 1000}km"
-                        else
-                            "${weather.visibility}m"
-                        parts.add(visKm)
+                        val visTxt = if (weather.visibility >= 10000) ">10km"
+                        else if (weather.visibility >= 1000) "${weather.visibility / 1000}km"
+                        else "${weather.visibility}m"
+                        parts.add(visTxt)
                     }
+                    if (weather.usAqi >= 0) parts.add("AQI ${weather.usAqi}")
                     views.setTextViewText(R.id.tv_condition, parts.joinToString(" · "))
                 } else {
                     views.setTextViewText(R.id.tv_temp, "--°")
@@ -183,7 +183,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly: "14 16° 20%  15 15° 10% ..."
+                // Hourly: "14 16° 20%  15 15° ..."
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
                     val hourlyText = weather.hourly.take(5).joinToString("  ") { item ->
                         val rain = if (item.rainProb > 0) " ${item.rainProb}%" else ""
@@ -198,7 +198,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_hourly, View.GONE)
                 }
 
-                // Daily: "ش 17/6 10%  ی 16/5  …"
+                // Daily: "ش 17/6 10%  ی 16/5 ..."
                 if (showDaily && weather != null && weather.daily.isNotEmpty()) {
                     val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
                     val startDow = (dayOfWeek + 5) % 7
@@ -248,7 +248,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             0 -> "صاف"
             1, 2 -> "کمی ابر"
             3 -> "ابری"
-            45, 48 -> "مه"
+            45, 48 -> "مه/غبار"
             in 51..67, in 80..82 -> "باران"
             in 71..77, in 85..86 -> "برف"
             in 95..99 -> "رعد"
