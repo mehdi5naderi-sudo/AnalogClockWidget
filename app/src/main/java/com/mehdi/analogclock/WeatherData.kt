@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Weather sources:
- * - METAR (OIII/OIIE): real temp, visibility, wind
+ * - METAR (OIII/OIIE): real temp, visibility, wind, clouds, observation time
  * - Open-Meteo forecast: hourly + daily
  * - Open-Meteo Air Quality: us_aqi
  */
@@ -21,9 +21,9 @@ object WeatherData {
     private const val PREFS = "clock_widget_prefs"
     private const val KEY_UPDATED = "weather_updated_at"
     private const val KEY_ATTEMPT = "weather_attempt_at"
-    private const val KEY_JSON = "weather_compact_v4"
+    private const val KEY_JSON = "weather_compact_v5"
+    private const val KEY_JSON_V4 = "weather_compact_v4"
     private const val KEY_JSON_V3 = "weather_compact_v3"
-    private const val KEY_JSON_V2 = "weather_compact_v2"
     private val fetching = AtomicBoolean(false)
 
     data class HourlyItem(
@@ -48,9 +48,11 @@ object WeatherData {
         val max: Int,
         val min: Int,
         val rain: Int,
-        val windSpeed: Int,      // km/h from METAR
-        val visibility: Int,     // meters from METAR
-        val usAqi: Int,          // from Open-Meteo AQ
+        val windSpeed: Int,       // km/h from METAR
+        val visibility: Int,      // meters from METAR
+        val usAqi: Int,           // from Open-Meteo AQ
+        val cloudCover: String,   // from METAR e.g. صاف / ابری
+        val obsTime: String,      // METAR observation time HH:mm Tehran
         val hourly: List<HourlyItem>,
         val daily: List<DailyItem>,
         val updatedAt: Long
@@ -64,8 +66,8 @@ object WeatherData {
         if (!isEnabled(context)) return null
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = p.getString(KEY_JSON, null)
+            ?: p.getString(KEY_JSON_V4, null)
             ?: p.getString(KEY_JSON_V3, null)
-            ?: p.getString(KEY_JSON_V2, null)
             ?: return null
         return try {
             parseCompact(JSONObject(raw), p.getLong(KEY_UPDATED, 0L))
@@ -116,6 +118,8 @@ object WeatherData {
             windSpeed = root.optInt("w", 0),
             visibility = root.optInt("v", 0),
             usAqi = root.optInt("aqi", -1),
+            cloudCover = root.optString("cl", ""),
+            obsTime = root.optString("ot", ""),
             hourly = hourly,
             daily = daily,
             updatedAt = updatedAt
@@ -133,6 +137,8 @@ object WeatherData {
         root.put("w", snapshot.windSpeed)
         root.put("v", snapshot.visibility)
         root.put("aqi", snapshot.usAqi)
+        root.put("cl", snapshot.cloudCover)
+        root.put("ot", snapshot.obsTime)
         val hArr = JSONArray()
         for (item in snapshot.hourly) {
             hArr.put(
@@ -164,29 +170,55 @@ object WeatherData {
             .putLong(KEY_UPDATED, 0L)
             .putLong(KEY_ATTEMPT, 0L)
             .remove(KEY_JSON)
+            .remove(KEY_JSON_V4)
             .remove(KEY_JSON_V3)
-            .remove(KEY_JSON_V2)
             .commit()
     }
-
-    // ---------- METAR helpers ----------
 
     private data class MetarObs(
         val temp: Int?,
         val windKt: Int?,
         val visM: Int?,
-        val code: Int?
+        val code: Int?,
+        val cloud: String,
+        val obsTime: String
     )
 
+    private fun cloudLabel(cover: String, raw: String): String {
+        val c = cover.uppercase()
+        return when {
+            c == "CAVOK" || c == "CLR" || c == "SKC" || raw.contains("NSC") || raw.contains("NCD") -> "صاف"
+            c == "FEW" || raw.contains("FEW") -> "کم‌ابر"
+            c == "SCT" || raw.contains("SCT") -> "نیمه‌ابری"
+            c == "BKN" || raw.contains("BKN") -> "ابری"
+            c == "OVC" || raw.contains("OVC") -> "پوشیده"
+            else -> if (c.isNotBlank() && c != "CLR") c else ""
+        }
+    }
+
+    private fun formatObsTime(reportTime: String): String {
+        // reportTime like 2026-11-14T15:30:00.000Z → convert to Tehran HH:mm
+        return try {
+            val iso = reportTime.replace("Z", "+00:00")
+            val instant = java.time.Instant.parse(
+                if (reportTime.endsWith("Z")) reportTime else reportTime + "Z"
+            )
+            val zdt = instant.atZone(java.time.ZoneId.of(SolarCalculator.TIME_ZONE))
+            "%02d:%02d".format(zdt.hour, zdt.minute)
+        } catch (_: Exception) {
+            // fallback: take HHMM from raw METAR if needed
+            ""
+        }
+    }
+
     private fun fetchMetar(): MetarObs? {
-        // Prefer Mehrabad (OIII), fallback Imam Khomeini (OIIE)
         val url = URL("https://aviationweather.gov/api/data/metar?ids=OIII,OIIE&format=json&taf=false")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 12000
             readTimeout = 12000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "SolarClockWidget/2.4")
+            setRequestProperty("User-Agent", "SolarClockWidget/2.5")
         }
         try {
             if (conn.responseCode !in 200..299) return null
@@ -194,7 +226,6 @@ object WeatherData {
             val arr = JSONArray(body)
             if (arr.length() == 0) return null
 
-            // Prefer OIII if present
             var chosen: JSONObject? = null
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
@@ -207,27 +238,20 @@ object WeatherData {
             chosen ?: return null
 
             val temp = if (chosen.has("temp")) chosen.optDouble("temp").toInt() else null
-            val windKt = if (chosen.has("wspd")) chosen.optInt("wspd") else null
+            val windKt = if (chosen.has("wspd")) chosen.optInt("wspd") else 0
+            val raw = chosen.optString("rawOb", "")
+            val cover = chosen.optString("cover", "")
 
-            // visibility: number in statute miles, or "6+", or from raw
             var visM: Int? = null
             val visib = chosen.opt("visib")
             when (visib) {
-                is Number -> {
-                    val sm = visib.toDouble()
-                    visM = (sm * 1609.34).toInt() // statute miles → meters
-                }
+                is Number -> visM = (visib.toDouble() * 1609.34).toInt()
                 is String -> {
-                    if (visib == "6+" || visib.equals("CAVOK", true)) {
-                        visM = 10000
-                    } else {
-                        visib.toDoubleOrNull()?.let { visM = (it * 1609.34).toInt() }
-                    }
+                    if (visib == "6+" || visib.equals("CAVOK", true)) visM = 10000
+                    else visib.toDoubleOrNull()?.let { visM = (it * 1609.34).toInt() }
                 }
             }
-            // Also try parse from raw METAR (e.g. "4000")
             if (visM == null) {
-                val raw = chosen.optString("rawOb", "")
                 val m = Regex("\\b(\\d{4})\\b").find(raw)
                 if (m != null) visM = m.groupValues[1].toIntOrNull()
             }
@@ -242,7 +266,10 @@ object WeatherData {
                 else -> 0
             }
 
-            return MetarObs(temp, windKt, visM, code)
+            val cloud = cloudLabel(cover, raw)
+            val obsTime = formatObsTime(chosen.optString("reportTime", ""))
+
+            return MetarObs(temp, windKt, visM, code, cloud, obsTime)
         } finally {
             conn.disconnect()
         }
@@ -258,14 +285,13 @@ object WeatherData {
             connectTimeout = 12000
             readTimeout = 12000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "SolarClockWidget/2.4")
+            setRequestProperty("User-Agent", "SolarClockWidget/2.5")
         }
         try {
             if (conn.responseCode !in 200..299) return -1
             val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val root = JSONObject(body)
-            val current = root.optJSONObject("current") ?: return -1
-            return current.optInt("us_aqi", -1)
+            return root.optJSONObject("current")?.optInt("us_aqi", -1) ?: -1
         } finally {
             conn.disconnect()
         }
@@ -382,7 +408,7 @@ object WeatherData {
 
         Thread {
             try {
-                // 1) Open-Meteo forecast (hourly + daily + fallback current)
+                // 1) Open-Meteo forecast
                 val forecastUrl = URL(
                     "https://api.open-meteo.com/v1/forecast" +
                         "?latitude=$lat&longitude=$lon" +
@@ -396,7 +422,7 @@ object WeatherData {
                     connectTimeout = 15000
                     readTimeout = 15000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "SolarClockWidget/2.4")
+                    setRequestProperty("User-Agent", "SolarClockWidget/2.5")
                 }
 
                 var temperature = 0
@@ -414,45 +440,40 @@ object WeatherData {
                         temperature = current.getDouble("temperature_2m").toInt()
                         feelsLike = current.optDouble("apparent_temperature", temperature.toDouble()).toInt()
                         code = current.optInt("weather_code", 0)
-                        hourlyList = extractHourly(root.optJSONObject("hourly"), 6, current.optString("time", ""))
+                        hourlyList = extractHourly(root.optJSONObject("hourly"), 5, current.optString("time", ""))
                         dailyList = extractDaily(daily)
                     }
                 } finally {
                     fConn.disconnect()
                 }
 
-                // 2) METAR for real temp / wind / visibility
+                // 2) METAR
                 var windKmh = 0
                 var visibilityM = 0
+                var cloudCover = ""
+                var obsTime = ""
                 try {
                     val metar = fetchMetar()
                     if (metar != null) {
                         if (metar.temp != null) {
                             temperature = metar.temp
-                            feelsLike = metar.temp // no feels-like in METAR
+                            feelsLike = metar.temp
                         }
-                        if (metar.windKt != null) {
-                            windKmh = (metar.windKt * 1.852).toInt() // kt → km/h
-                        }
-                        if (metar.visM != null) {
-                            visibilityM = metar.visM
-                        }
-                        if (metar.code != null && metar.code != 0) {
-                            code = metar.code
-                        }
+                        windKmh = ((metar.windKt ?: 0) * 1.852).toInt()
+                        if (metar.visM != null) visibilityM = metar.visM
+                        if (metar.code != null && metar.code != 0) code = metar.code
+                        cloudCover = metar.cloud
+                        obsTime = metar.obsTime
                     }
                 } catch (_: Exception) {}
 
-                // 3) US AQI from Open-Meteo Air Quality
+                // 3) US AQI
                 var usAqi = -1
                 try {
                     usAqi = fetchUsAqi(lat, lon)
                 } catch (_: Exception) {}
 
-                if (hourlyList.size < 3 && dailyList.isEmpty()) {
-                    // almost nothing useful
-                    return@Thread
-                }
+                if (hourlyList.size < 3 && dailyList.isEmpty()) return@Thread
 
                 val snapshot = Snapshot(
                     temperature = temperature,
@@ -464,6 +485,8 @@ object WeatherData {
                     windSpeed = windKmh,
                     visibility = visibilityM,
                     usAqi = usAqi,
+                    cloudCover = cloudCover,
+                    obsTime = obsTime,
                     hourly = hourlyList,
                     daily = dailyList,
                     updatedAt = System.currentTimeMillis()
@@ -471,8 +494,8 @@ object WeatherData {
 
                 p.edit()
                     .putString(KEY_JSON, toCompact(snapshot))
+                    .remove(KEY_JSON_V4)
                     .remove(KEY_JSON_V3)
-                    .remove(KEY_JSON_V2)
                     .putLong(KEY_UPDATED, System.currentTimeMillis())
                     .commit()
 
