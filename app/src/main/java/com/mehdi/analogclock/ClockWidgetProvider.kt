@@ -135,7 +135,20 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
                 if (weather != null) {
                     views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
-                    views.setTextViewText(R.id.tv_condition, weatherLabel(weather.code))
+
+                    // condition + wind + visibility
+                    val parts = mutableListOf<String>()
+                    val label = weatherLabel(weather.code)
+                    if (label.isNotEmpty()) parts.add(label)
+                    if (weather.windSpeed > 0) parts.add("${weather.windSpeed}km/h")
+                    if (weather.visibility > 0) {
+                        val visKm = if (weather.visibility >= 1000)
+                            "${weather.visibility / 1000}km"
+                        else
+                            "${weather.visibility}m"
+                        parts.add(visKm)
+                    }
+                    views.setTextViewText(R.id.tv_condition, parts.joinToString(" · "))
                 } else {
                     views.setTextViewText(R.id.tv_temp, "--°")
                     views.setTextViewText(R.id.tv_condition, "")
@@ -170,30 +183,34 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly
+                // Hourly: "14 16° 20%  15 15° 10% ..."
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val hourlyText = "ساعتی: " + weather.hourly.take(6).joinToString(" ") { "${it.temperature}°" }
+                    val hourlyText = weather.hourly.take(5).joinToString("  ") { item ->
+                        val rain = if (item.rainProb > 0) " ${item.rainProb}%" else ""
+                        "${item.hour} ${item.temperature}°$rain"
+                    }
                     views.setTextViewText(R.id.tv_hourly, hourlyText)
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
                 } else if (showHourly) {
-                    views.setTextViewText(R.id.tv_hourly, "ساعتی: …")
+                    views.setTextViewText(R.id.tv_hourly, "…")
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
                 } else {
                     views.setViewVisibility(R.id.tv_hourly, View.GONE)
                 }
 
-                // Daily
+                // Daily: "ش 17/6 10%  ی 16/5  …"
                 if (showDaily && weather != null && weather.daily.isNotEmpty()) {
                     val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
                     val startDow = (dayOfWeek + 5) % 7
-                    val dailyText = "روزانه: " + weather.daily.take(3).mapIndexed { index, item ->
+                    val dailyText = weather.daily.take(3).mapIndexed { index, item ->
                         val name = dayNames.getOrElse((startDow + index) % 7) { "·" }
-                        "$name ${item.max}/${item.min}"
+                        val rain = if (item.rainProb > 0) " ${item.rainProb}%" else ""
+                        "$name ${item.max}/${item.min}$rain"
                     }.joinToString("  ")
                     views.setTextViewText(R.id.tv_daily, dailyText)
                     views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
                 } else if (showDaily) {
-                    views.setTextViewText(R.id.tv_daily, "روزانه: …")
+                    views.setTextViewText(R.id.tv_daily, "…")
                     views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
                 } else {
                     views.setViewVisibility(R.id.tv_daily, View.GONE)
