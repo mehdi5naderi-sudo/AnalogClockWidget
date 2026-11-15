@@ -46,7 +46,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
-            ACTION_REFRESH, ACTION_TICK,
+            ACTION_REFRESH -> {
+                try {
+                    WeatherData.invalidate(context)
+                    WeatherData.refreshIfNeeded(context, force = true)
+                } catch (_: Exception) {}
+                refreshAll(context)
+            }
+            ACTION_TICK,
             Intent.ACTION_USER_PRESENT,
             Intent.ACTION_SCREEN_ON,
             Intent.ACTION_MY_PACKAGE_REPLACED,
@@ -120,8 +127,17 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 }
                 views.setTextViewText(R.id.tv_time, timeText)
 
-                // Weather
-                val weather = try { WeatherData.read(context) } catch (_: Exception) { null }
+                // Weather — force refresh if hourly/daily missing
+                var weather = try { WeatherData.read(context) } catch (_: Exception) { null }
+                val needForce = weather == null ||
+                        weather.hourly.isEmpty() ||
+                        weather.daily.isEmpty()
+                try {
+                    WeatherData.refreshIfNeeded(context, force = needForce)
+                } catch (_: Exception) {}
+                // re-read after possible refresh start
+                weather = try { WeatherData.read(context) } catch (_: Exception) { null }
+
                 if (weather != null) {
                     views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
                     views.setTextViewText(R.id.tv_condition, weatherLabel(weather.code))
@@ -129,7 +145,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_temp, "--°")
                     views.setTextViewText(R.id.tv_condition, "")
                 }
-                try { WeatherData.refreshIfNeeded(context, force = false) } catch (_: Exception) {}
 
                 // Dates + Weekday
                 val weekday = SolarCalculator.weekdayFa(dayOfWeek)
@@ -166,7 +181,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_hourly, hourlyText)
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
                 } else {
-                    views.setViewVisibility(R.id.tv_hourly, View.GONE)
+                    views.setTextViewText(R.id.tv_hourly, if (showHourly) "ساعتی: …" else "")
+                    views.setViewVisibility(R.id.tv_hourly, if (showHourly) View.VISIBLE else View.GONE)
                 }
 
                 // Daily forecast
@@ -180,7 +196,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_daily, dailyText)
                     views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
                 } else {
-                    views.setViewVisibility(R.id.tv_daily, View.GONE)
+                    views.setTextViewText(R.id.tv_daily, if (showDaily) "روزانه: …" else "")
+                    views.setViewVisibility(R.id.tv_daily, if (showDaily) View.VISIBLE else View.GONE)
                 }
 
             } catch (e: Exception) {
@@ -194,7 +211,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_daily, "")
             }
 
-            // Click to refresh
+            // Click to refresh (invalidate + force)
             try {
                 val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
                 val pi = PendingIntent.getBroadcast(
