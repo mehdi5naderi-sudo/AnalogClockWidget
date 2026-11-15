@@ -139,8 +139,25 @@ class SettingsActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = 16 })
 
+        // Version info
+        val versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        } catch (_: Exception) {
+            "?"
+        }
+        val versionCode = try {
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                packageManager.getPackageInfo(packageName, 0).longVersionCode.toString()
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0).versionCode.toString()
+            }
+        } catch (_: Exception) {
+            "?"
+        }
+
         root.addView(TextView(this).apply {
-            text = "نسخه ویجت دیجیتال · Open-Meteo · بدون نیاز به کلید API"
+            text = "نسخه $versionName  ·  build $versionCode\nOpen-Meteo · بدون نیاز به کلید API"
             textSize = 12f
             setTextColor(0xFF8B9AAB.toInt())
             gravity = Gravity.CENTER
