@@ -67,6 +67,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
         private const val ACTION_REFRESH = "com.mehdi.analogclock.REFRESH"
         private const val PREFS = "clock_widget_prefs"
 
+        private fun pd(n: Int): String = SolarCalculator.toPersianDigits(n.toString())
+        private fun pd(s: String): String = SolarCalculator.toPersianDigits(s)
+
         private fun refreshAll(context: Context) {
             try {
                 val manager = AppWidgetManager.getInstance(context)
@@ -109,21 +112,20 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val minute = cal.get(Calendar.MINUTE)
                 val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
 
-                // Background transparency
+                // Background
                 val alpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
-                val bgColor = Color.argb(alpha, 11, 15, 23)
-                views.setInt(R.id.widget_root, "setBackgroundColor", bgColor)
+                views.setInt(R.id.widget_root, "setBackgroundColor", Color.argb(alpha, 11, 15, 23))
 
-                // Time
+                // Clock time
                 val timeText = if (use24h) {
-                    "%02d:%02d".format(hour, minute)
+                    pd("%02d:%02d".format(hour, minute))
                 } else {
                     val h12 = when {
                         hour == 0 -> 12
                         hour > 12 -> hour - 12
                         else -> hour
                     }
-                    "%d:%02d".format(h12, minute)
+                    pd("%d:%02d".format(h12, minute))
                 }
                 views.setTextViewText(R.id.tv_time, timeText)
 
@@ -134,24 +136,40 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 weather = try { WeatherData.read(context) } catch (_: Exception) { null }
 
                 if (weather != null) {
-                    views.setTextViewText(R.id.tv_temp, "${weather.temperature}°")
-
-                    // condition · wind · visibility · AQI
+                    // One line: temp · condition · cloud · wind · vis · AQI
                     val parts = mutableListOf<String>()
+                    parts.add("${pd(weather.temperature)}°")
                     val label = weatherLabel(weather.code)
                     if (label.isNotEmpty()) parts.add(label)
-                    if (weather.windSpeed > 0) parts.add("${weather.windSpeed}km/h")
+                    if (weather.cloudCover.isNotBlank()) parts.add(weather.cloudCover)
+                    // Always show wind
+                    parts.add(if (weather.windSpeed > 0) "باد ${pd(weather.windSpeed)}" else "آرام")
                     if (weather.visibility > 0) {
-                        val visTxt = if (weather.visibility >= 10000) ">10km"
-                        else if (weather.visibility >= 1000) "${weather.visibility / 1000}km"
-                        else "${weather.visibility}m"
+                        val visTxt = when {
+                            weather.visibility >= 10000 -> ">۱۰کیلومتر"
+                            weather.visibility >= 1000 -> "${pd(weather.visibility / 1000)}کیلومتر"
+                            else -> "${pd(weather.visibility)}متر"
+                        }
                         parts.add(visTxt)
                     }
-                    if (weather.usAqi >= 0) parts.add("AQI ${weather.usAqi}")
+                    if (weather.usAqi >= 0) parts.add("AQI ${pd(weather.usAqi)}")
                     views.setTextViewText(R.id.tv_condition, parts.joinToString(" · "))
+
+                    // Times: obs · last update
+                    val metaParts = mutableListOf<String>()
+                    if (weather.obsTime.isNotBlank()) {
+                        metaParts.add("داده ${pd(weather.obsTime)}")
+                    }
+                    if (weather.updatedAt > 0L) {
+                        val u = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
+                        u.timeInMillis = weather.updatedAt
+                        val stamp = pd("%02d:%02d".format(u.get(Calendar.HOUR_OF_DAY), u.get(Calendar.MINUTE)))
+                        metaParts.add("آخرین $stamp")
+                    }
+                    views.setTextViewText(R.id.tv_meta, metaParts.joinToString(" · "))
                 } else {
-                    views.setTextViewText(R.id.tv_temp, "--°")
-                    views.setTextViewText(R.id.tv_condition, "")
+                    views.setTextViewText(R.id.tv_condition, "—")
+                    views.setTextViewText(R.id.tv_meta, "")
                 }
 
                 // Dates
@@ -160,7 +178,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val gregorianText = SolarCalculator.formatGregorianFa(year, month, day)
                 val jalaliShort = jalaliText.substringBeforeLast(" ")
                 val gregorianShort = gregorianText.substringBeforeLast(" ")
-
                 val datesText = buildString {
                     append(weekday)
                     if (showJalali || showGregorian) append(" · ")
@@ -175,21 +192,23 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 // Solar
                 if (showSolar) {
                     val today = SolarCalculator.solarDay(year, dayOfYear, lat, lon)
-                    val sunrise = SolarCalculator.formatTime(today.sunrise, use24h)
-                    val sunset = SolarCalculator.formatTime(today.sunset, use24h)
+                    val sunrise = pd(SolarCalculator.formatTime(today.sunrise, use24h))
+                    val sunset = pd(SolarCalculator.formatTime(today.sunset, use24h))
                     views.setTextViewText(R.id.tv_solar, "$sunrise · $sunset")
                     views.setViewVisibility(R.id.tv_solar, View.VISIBLE)
                 } else {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly: "14 16° 20%  15 15° ..."
+                // Hourly — one line per hour
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val hourlyText = weather.hourly.take(5).joinToString("  ") { item ->
-                        val rain = if (item.rainProb > 0) " ${item.rainProb}%" else ""
-                        "${item.hour} ${item.temperature}°$rain"
+                    val lines = weather.hourly.take(5).map { item ->
+                        val h = pd("%02d".format(item.hour))
+                        val t = "${pd(item.temperature)}°"
+                        val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
+                        "$h   $t   $r"
                     }
-                    views.setTextViewText(R.id.tv_hourly, hourlyText)
+                    views.setTextViewText(R.id.tv_hourly, lines.joinToString("\n"))
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
                 } else if (showHourly) {
                     views.setTextViewText(R.id.tv_hourly, "…")
@@ -198,16 +217,21 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_hourly, View.GONE)
                 }
 
-                // Daily: "ش 17/6 10%  ی 16/5 ..."
+                // Daily — full weekday name, fixed DOW mapping
+                // Calendar: Sun=1 .. Sat=7  →  list index: Sat=0, Sun=1, ... Fri=6
+                // index = dayOfWeek % 7
                 if (showDaily && weather != null && weather.daily.isNotEmpty()) {
-                    val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
-                    val startDow = (dayOfWeek + 5) % 7
-                    val dailyText = weather.daily.take(3).mapIndexed { index, item ->
-                        val name = dayNames.getOrElse((startDow + index) % 7) { "·" }
-                        val rain = if (item.rainProb > 0) " ${item.rainProb}%" else ""
-                        "$name ${item.max}/${item.min}$rain"
-                    }.joinToString("  ")
-                    views.setTextViewText(R.id.tv_daily, dailyText)
+                    val fullNames = listOf(
+                        "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"
+                    )
+                    val startIdx = dayOfWeek % 7
+                    val lines = weather.daily.take(3).mapIndexed { index, item ->
+                        val name = fullNames.getOrElse((startIdx + index) % 7) { "·" }
+                        val temps = "${pd(item.max)}/${pd(item.min)}"
+                        val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
+                        "$name  $temps  $r"
+                    }
+                    views.setTextViewText(R.id.tv_daily, lines.joinToString("\n"))
                     views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
                 } else if (showDaily) {
                     views.setTextViewText(R.id.tv_daily, "…")
@@ -219,15 +243,14 @@ class ClockWidgetProvider : AppWidgetProvider() {
             } catch (e: Exception) {
                 Log.e(TAG, "update content", e)
                 views.setTextViewText(R.id.tv_time, "--:--")
-                views.setTextViewText(R.id.tv_temp, "--°")
                 views.setTextViewText(R.id.tv_condition, "خطا")
+                views.setTextViewText(R.id.tv_meta, "")
                 views.setTextViewText(R.id.tv_dates, "")
                 views.setTextViewText(R.id.tv_solar, "")
                 views.setTextViewText(R.id.tv_hourly, "")
                 views.setTextViewText(R.id.tv_daily, "")
             }
 
-            // Click to refresh
             try {
                 val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
                 val pi = PendingIntent.getBroadcast(
@@ -271,7 +294,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 cal.add(Calendar.MINUTE, 1)
                 cal.set(Calendar.SECOND, 0)
                 cal.set(Calendar.MILLISECOND, 0)
-
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC, cal.timeInMillis, pi)
                 } else {
