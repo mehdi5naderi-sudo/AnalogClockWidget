@@ -127,15 +127,10 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 }
                 views.setTextViewText(R.id.tv_time, timeText)
 
-                // Weather — force refresh if hourly/daily missing
+                // Weather
                 var weather = try { WeatherData.read(context) } catch (_: Exception) { null }
-                val needForce = weather == null ||
-                        weather.hourly.isEmpty() ||
-                        weather.daily.isEmpty()
-                try {
-                    WeatherData.refreshIfNeeded(context, force = needForce)
-                } catch (_: Exception) {}
-                // re-read after possible refresh start
+                val needForce = weather == null || weather.hourly.isEmpty() || weather.daily.isEmpty()
+                try { WeatherData.refreshIfNeeded(context, force = needForce) } catch (_: Exception) {}
                 weather = try { WeatherData.read(context) } catch (_: Exception) { null }
 
                 if (weather != null) {
@@ -146,7 +141,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_condition, "")
                 }
 
-                // Dates + Weekday
+                // Dates
                 val weekday = SolarCalculator.weekdayFa(dayOfWeek)
                 val jalaliText = SolarCalculator.formatJalaliFull(year, month, day)
                 val gregorianText = SolarCalculator.formatGregorianFa(year, month, day)
@@ -164,7 +159,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 }
                 views.setTextViewText(R.id.tv_dates, datesText)
 
-                // Sunrise / Sunset
+                // Solar
                 if (showSolar) {
                     val today = SolarCalculator.solarDay(year, dayOfYear, lat, lon)
                     val sunrise = SolarCalculator.formatTime(today.sunrise, use24h)
@@ -175,29 +170,39 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly forecast
+                // Hourly
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val hourlyText = "ساعتی: " + weather.hourly.take(6).joinToString(" ") { "${it.temperature}°" }
+                    val hourlyText = weather.hourly.take(6).joinToString("  ") { "${it.temperature}°" }
                     views.setTextViewText(R.id.tv_hourly, hourlyText)
+                    views.setViewVisibility(R.id.tv_hourly_label, View.VISIBLE)
+                    views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
+                } else if (showHourly) {
+                    views.setTextViewText(R.id.tv_hourly, "…")
+                    views.setViewVisibility(R.id.tv_hourly_label, View.VISIBLE)
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
                 } else {
-                    views.setTextViewText(R.id.tv_hourly, if (showHourly) "ساعتی: …" else "")
-                    views.setViewVisibility(R.id.tv_hourly, if (showHourly) View.VISIBLE else View.GONE)
+                    views.setViewVisibility(R.id.tv_hourly_label, View.GONE)
+                    views.setViewVisibility(R.id.tv_hourly, View.GONE)
                 }
 
-                // Daily forecast
+                // Daily
                 if (showDaily && weather != null && weather.daily.isNotEmpty()) {
                     val dayNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
                     val startDow = (dayOfWeek + 5) % 7
-                    val dailyText = "روزانه: " + weather.daily.take(3).mapIndexed { index, item ->
+                    val dailyText = weather.daily.take(3).mapIndexed { index, item ->
                         val name = dayNames.getOrElse((startDow + index) % 7) { "·" }
                         "$name ${item.max}/${item.min}"
                     }.joinToString("  ")
                     views.setTextViewText(R.id.tv_daily, dailyText)
+                    views.setViewVisibility(R.id.tv_daily_label, View.VISIBLE)
+                    views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
+                } else if (showDaily) {
+                    views.setTextViewText(R.id.tv_daily, "…")
+                    views.setViewVisibility(R.id.tv_daily_label, View.VISIBLE)
                     views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
                 } else {
-                    views.setTextViewText(R.id.tv_daily, if (showDaily) "روزانه: …" else "")
-                    views.setViewVisibility(R.id.tv_daily, if (showDaily) View.VISIBLE else View.GONE)
+                    views.setViewVisibility(R.id.tv_daily_label, View.GONE)
+                    views.setViewVisibility(R.id.tv_daily, View.GONE)
                 }
 
             } catch (e: Exception) {
@@ -205,13 +210,9 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_time, "--:--")
                 views.setTextViewText(R.id.tv_temp, "--°")
                 views.setTextViewText(R.id.tv_condition, "خطا")
-                views.setTextViewText(R.id.tv_dates, "")
-                views.setTextViewText(R.id.tv_solar, "")
-                views.setTextViewText(R.id.tv_hourly, "")
-                views.setTextViewText(R.id.tv_daily, "")
             }
 
-            // Click to refresh (invalidate + force)
+            // Click to refresh
             try {
                 val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
                 val pi = PendingIntent.getBroadcast(
