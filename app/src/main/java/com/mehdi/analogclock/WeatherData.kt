@@ -333,7 +333,7 @@ object WeatherData {
                         code = current.optInt("weather_code", 0)
                         windKmh = current.optDouble("wind_speed_10m", 0.0).toInt()
                         obsTime = current.optString("time", "").substringAfter("T", "").take(5)
-                        hourlyList = extractHourly(root.optJSONObject("hourly"), 5, current.optString("time", ""))
+                        hourlyList = extractHourly(root.optJSONObject("hourly"), 6, current.optString("time", ""))
                         dailyList = extractDaily(daily)
                     }
                 } finally {
