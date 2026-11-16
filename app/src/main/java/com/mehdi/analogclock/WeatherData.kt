@@ -46,9 +46,7 @@ object WeatherData {
         val min: Int,
         val rain: Int,
         val windSpeed: Int,       // km/h from Open-Meteo
-        val visibility: Int,      // meters from Open-Meteo
         val usAqi: Int,           // from Open-Meteo AQ
-        val cloudCover: String,   // cloud cover percentage from Open-Meteo
         val obsTime: String,      // Open-Meteo current observation time HH:mm
         val hourly: List<HourlyItem>,
         val daily: List<DailyItem>,
@@ -110,9 +108,7 @@ object WeatherData {
             min = root.optInt("n", root.optInt("t", 0)),
             rain = root.optInt("r", 0),
             windSpeed = root.optInt("w", 0),
-            visibility = root.optInt("v", 0),
             usAqi = root.optInt("aqi", -1),
-            cloudCover = root.optString("cl", ""),
             obsTime = root.optString("ot", ""),
             hourly = hourly,
             daily = daily,
@@ -129,9 +125,7 @@ object WeatherData {
         root.put("n", snapshot.min)
         root.put("r", snapshot.rain)
         root.put("w", snapshot.windSpeed)
-        root.put("v", snapshot.visibility)
         root.put("aqi", snapshot.usAqi)
-        root.put("cl", snapshot.cloudCover)
         root.put("ot", snapshot.obsTime)
         val hArr = JSONArray()
         for (item in snapshot.hourly) {
@@ -307,7 +301,7 @@ object WeatherData {
                 val forecastUrl = URL(
                     "https://api.open-meteo.com/v1/forecast" +
                         "?latitude=$lat&longitude=$lon" +
-                        "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,visibility,cloud_cover" +
+                        "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
                         "&hourly=temperature_2m,weather_code,precipitation_probability" +
                         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
                         "&forecast_days=3&timezone=${tz.replace("/", "%2F")}"
@@ -324,8 +318,6 @@ object WeatherData {
                 var feelsLike = 0
                 var code = 0
                 var windKmh = 0
-                var visibilityM = 0
-                var cloudCover = ""
                 var obsTime = ""
                 var hourlyList = emptyList<HourlyItem>()
                 var dailyList = emptyList<DailyItem>()
@@ -340,9 +332,6 @@ object WeatherData {
                         feelsLike = current.optDouble("apparent_temperature", temperature.toDouble()).toInt()
                         code = current.optInt("weather_code", 0)
                         windKmh = current.optDouble("wind_speed_10m", 0.0).toInt()
-                        visibilityM = current.optDouble("visibility", 0.0).toInt()
-                        val cloudPercent = current.optDouble("cloud_cover", Double.NaN)
-                        cloudCover = if (cloudPercent.isNaN()) "" else "${cloudPercent.toInt()}٪ ابر"
                         obsTime = current.optString("time", "").substringAfter("T", "").take(5)
                         hourlyList = extractHourly(root.optJSONObject("hourly"), 5, current.optString("time", ""))
                         dailyList = extractDaily(daily)
@@ -368,9 +357,7 @@ object WeatherData {
                     min = dailyList.firstOrNull()?.min ?: temperature,
                     rain = dailyList.firstOrNull()?.rainProb ?: 0,
                     windSpeed = windKmh,
-                    visibility = visibilityM,
                     usAqi = usAqi,
-                    cloudCover = cloudCover,
                     obsTime = obsTime,
                     hourly = hourlyList,
                     daily = dailyList,
