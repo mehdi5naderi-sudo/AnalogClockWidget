@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -23,6 +24,7 @@ class NotesActivity : Activity() {
     )
 
     private lateinit var editor: EditText
+    private lateinit var editorScroll: ScrollView
     private lateinit var tabRow: LinearLayout
     private val tabButtons = mutableListOf<Button>()
     private var selectedTab = 0
@@ -82,11 +84,27 @@ class NotesActivity : Activity() {
             setBackgroundColor(0xFF1E2738.toInt())
             textDirection = View.TEXT_DIRECTION_RTL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
+            minHeight = dp(280)
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
-        root.addView(editor, LinearLayout.LayoutParams(
+
+        // Let the outer ScrollView handle long-text scrolling with a smooth fling.
+        editorScroll = ScrollView(this).apply {
+            isFillViewport = true
+            isSmoothScrollingEnabled = true
+            isVerticalScrollBarEnabled = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            setFadingEdgeLength(dp(20))
+            addView(editor, ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        root.addView(editorScroll, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ).apply {
             topMargin = dp(16)
@@ -120,6 +138,7 @@ class NotesActivity : Activity() {
             ?: if (tab.key == "other_notes") prefs.getString("saved_notes", "") else ""
         editor.setText(saved.orEmpty())
         editor.hint = tab.hint
+        editorScroll.scrollTo(0, 0)
 
         tabButtons.forEachIndexed { i, button ->
             val active = i == selectedTab
