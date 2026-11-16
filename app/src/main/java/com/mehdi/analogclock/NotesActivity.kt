@@ -1,6 +1,7 @@
 package com.mehdi.analogclock
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -46,14 +47,30 @@ class NotesActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
 
-        root.addView(TextView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        header.addView(TextView(this).apply {
             text = "یادداشت‌ها"
             textSize = 22f
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(0xFFFFC857.toInt())
-            setPadding(0, 0, 0, 22)
-        })
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        header.addView(Button(this).apply {
+            text = "اشتراک‌گذاری"
+            isAllCaps = false
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(0xFF0B0F17.toInt())
+            setBackgroundColor(0xFFFFC857.toInt())
+            setOnClickListener { shareAllNotes() }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)
+        ))
+        root.addView(header)
 
         tabRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -147,6 +164,24 @@ class NotesActivity : Activity() {
             button.setTextColor(if (active) 0xFF0B0F17.toInt() else 0xFFF3F5F7.toInt())
             button.setBackgroundColor(if (active) 0xFFFFC857.toInt() else 0xFF2A3548.toInt())
         }
+    }
+
+    private fun shareAllNotes() {
+        // Save edits in the currently visible tab before collecting all three notes.
+        saveCurrentNote()
+
+        val shareText = tabs.map { tab ->
+            val note = prefs.getString(tab.key, null)
+                ?: if (tab.key == "other_notes") prefs.getString("saved_notes", "") else ""
+            "${tab.title}:\n${note.orEmpty().trim()}"
+        }.joinToString("\n\n────────────────\n\n")
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "یادداشت‌ها")
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+        startActivity(Intent.createChooser(intent, "اشتراک‌گذاری سه یادداشت"))
     }
 
     private fun saveCurrentNote() {
