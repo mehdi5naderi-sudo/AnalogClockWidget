@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Weather sources:
- * - Open-Meteo Forecast API: current conditions, visibility, wind, clouds, hourly and daily forecasts
+ * - Open-Meteo Forecast API: current conditions, wind, hourly and daily forecasts
  * - Open-Meteo Air Quality API: US AQI
  */
 object WeatherData {
