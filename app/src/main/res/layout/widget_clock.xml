@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
+    android:layoutDirection="ltr"
     android:background="#FF0B0F17"
     android:padding="8dp">
 
@@ -77,15 +78,34 @@
         android:gravity="center_vertical"
         android:paddingStart="6dp">
 
-        <TextView
-            android:id="@+id/tv_hourly"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#FFEEEEEE"
-            android:textSize="11sp"
-            android:lineSpacingExtra="2dp"
-            android:includeFontPadding="false" />
+            android:orientation="horizontal"
+            android:layoutDirection="ltr">
+
+            <TextView
+                android:id="@+id/tv_hourly"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text=""
+                android:textColor="#FFEEEEEE"
+                android:textSize="11sp"
+                android:lineSpacingExtra="2dp"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/tv_hourly2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text=""
+                android:textColor="#FFEEEEEE"
+                android:textSize="11sp"
+                android:lineSpacingExtra="2dp"
+                android:includeFontPadding="false" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_daily"
@@ -96,6 +116,19 @@
             android:textColor="#FFEEEEEE"
             android:textSize="11sp"
             android:lineSpacingExtra="2dp"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/tv_notes_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="📝 یادداشت‌ها"
+            android:textColor="#FFFFC857"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
             android:includeFontPadding="false" />
 
     </LinearLayout>
