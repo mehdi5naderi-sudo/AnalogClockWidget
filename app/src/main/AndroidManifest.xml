@@ -11,6 +11,11 @@
         android:icon="@drawable/ic_clock_settings">
 
         <activity
+            android:name=".NotesActivity"
+            android:exported="false"
+            android:label="یادداشت‌ها" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="true"
             android:label="تنظیمات ویجت">
