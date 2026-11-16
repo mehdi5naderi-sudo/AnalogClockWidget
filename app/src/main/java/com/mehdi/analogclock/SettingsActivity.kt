@@ -51,8 +51,13 @@ class SettingsActivity : Activity() {
 
         root.addView(sectionTitle("ظاهر"))
         addSeek(root, "digital_clock_size", "اندازه ساعت (۰=پیش‌فرض)", 0, 120, 0)
+        addSeek(root, "condition_size", "اندازه وضعیت و دمای هوا (۰=پیش‌فرض)", 0, 40, 0)
+        addSeek(root, "meta_size", "اندازه زمان دریافت داده (۰=پیش‌فرض)", 0, 36, 0)
         addSeek(root, "date_size", "اندازه تاریخ (۰=پیش‌فرض)", 0, 48, 0)
         addSeek(root, "label_size", "اندازه طلوع/غروب (۰=پیش‌فرض)", 0, 40, 0)
+        addSeek(root, "hourly_size", "اندازه پیش‌بینی ساعتی (۰=پیش‌فرض)", 0, 40, 0)
+        addSeek(root, "daily_size", "اندازه پیش‌بینی روزانه (۰=پیش‌فرض)", 0, 40, 0)
+        addSeek(root, "notes_size", "اندازه عنوان یادداشت‌ها (۰=پیش‌فرض)", 0, 40, 0)
         addSeek(root, "background_alpha", "شفافیت پس‌زمینه٪", 0, 100, 100)
         addSwitch(root, "use_24h", "ساعت ۲۴ ساعته", true)
 
