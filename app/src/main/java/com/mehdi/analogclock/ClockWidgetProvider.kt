@@ -191,26 +191,23 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly — one line per hour
+                // Hourly — two forecast hours on each line
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val lines = weather.hourly.take(5).map { item ->
-                        val h = pd("%02d".format(item.hour))
-                        val t = "${pd(item.temperature)}°"
-                        val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
-                        "$h   $t   $r"
+                    val lines = weather.hourly.take(6).chunked(2).map { pair ->
+                        pair.joinToString("     │     ") { item ->
+                            val h = pd("%02d".format(item.hour))
+                            val t = "${pd(item.temperature)}°"
+                            val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
+                            "$h  $t  $r"
+                        }
                     }
-                    views.setTextViewText(R.id.tv_hourly, lines.filterIndexed { index, _ -> index % 2 == 0 }.joinToString("\n"))
-                    views.setTextViewText(R.id.tv_hourly2, lines.filterIndexed { index, _ -> index % 2 == 1 }.joinToString("\n"))
+                    views.setTextViewText(R.id.tv_hourly, lines.joinToString("\n"))
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
-                    views.setViewVisibility(R.id.tv_hourly2, View.VISIBLE)
                 } else if (showHourly) {
                     views.setTextViewText(R.id.tv_hourly, "…")
-                    views.setTextViewText(R.id.tv_hourly2, "")
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
-                    views.setViewVisibility(R.id.tv_hourly2, View.VISIBLE)
                 } else {
                     views.setViewVisibility(R.id.tv_hourly, View.GONE)
-                    views.setViewVisibility(R.id.tv_hourly2, View.GONE)
                 }
 
                 // Daily — full weekday name, fixed DOW mapping
@@ -244,7 +241,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_dates, "")
                 views.setTextViewText(R.id.tv_solar, "")
                 views.setTextViewText(R.id.tv_hourly, "")
-                views.setTextViewText(R.id.tv_hourly2, "")
                 views.setTextViewText(R.id.tv_daily, "")
             }
 
