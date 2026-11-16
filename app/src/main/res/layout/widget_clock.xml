@@ -67,6 +67,19 @@
             android:textStyle="bold"
             android:includeFontPadding="false" />
 
+        <TextView
+            android:id="@+id/tv_notes_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="📝 یادداشت‌ها"
+            android:textColor="#FFFFC857"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
+            android:includeFontPadding="false" />
+
     </LinearLayout>
 
     <LinearLayout
@@ -83,8 +96,8 @@
             android:layout_height="wrap_content"
             android:text=""
             android:textColor="#FFEEEEEE"
-            android:textSize="11sp"
-            android:lineSpacingExtra="3dp"
+            android:textSize="14sp"
+            android:lineSpacingExtra="2dp"
             android:includeFontPadding="false" 
             android:gravity="end"
             android:textAlignment="viewEnd"/>
@@ -96,23 +109,8 @@
             android:layout_marginTop="6dp"
             android:text=""
             android:textColor="#FFEEEEEE"
-            android:textSize="11sp"
-            android:lineSpacingExtra="2dp"
-            android:includeFontPadding="false" 
-            android:gravity="end"
-            android:textAlignment="viewEnd"/>
-
-        <TextView
-            android:id="@+id/tv_notes_link"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="📝 یادداشت‌ها"
-            android:textColor="#FFFFC857"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:clickable="true"
-            android:focusable="true"
+            android:textSize="13sp"
+            android:lineSpacingExtra="1dp"
             android:includeFontPadding="false" 
             android:gravity="end"
             android:textAlignment="viewEnd"/>
