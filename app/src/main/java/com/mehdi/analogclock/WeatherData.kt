@@ -13,9 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Weather sources:
- * - METAR (OIII/OIIE): real temp, visibility, wind, clouds, observation time
- * - Open-Meteo forecast: hourly + daily
- * - Open-Meteo Air Quality: us_aqi
+ * - Open-Meteo Forecast API: current conditions, visibility, wind, clouds, hourly and daily forecasts
+ * - Open-Meteo Air Quality API: US AQI
  */
 object WeatherData {
     private const val PREFS = "clock_widget_prefs"
