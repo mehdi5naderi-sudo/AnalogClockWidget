@@ -116,6 +116,25 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val alpha = ((backgroundAlpha / 100f) * 255f).toInt().coerceIn(0, 255)
                 views.setInt(R.id.widget_root, "setBackgroundColor", Color.argb(alpha, 11, 15, 23))
 
+                // Per-element font sizes (0 means keep XML default)
+                fun applySize(viewId: Int, key: String, defaultSize: Float) {
+                    val configured = p.getFloat(key, 0f)
+                    val size = if (configured > 0f) configured else defaultSize
+                    views.setTextViewTextSize(
+                        viewId,
+                        android.util.TypedValue.COMPLEX_UNIT_SP,
+                        size
+                    )
+                }
+                applySize(R.id.tv_time, "digital_clock_size", 28f)
+                applySize(R.id.tv_condition, "condition_size", 12f)
+                applySize(R.id.tv_meta, "meta_size", 10f)
+                applySize(R.id.tv_dates, "date_size", 11f)
+                applySize(R.id.tv_solar, "label_size", 11f)
+                applySize(R.id.tv_hourly, "hourly_size", 11f)
+                applySize(R.id.tv_daily, "daily_size", 11f)
+                applySize(R.id.tv_notes_link, "notes_size", 12f)
+
                 // Clock time
                 val timeText = if (use24h) {
                     pd("%02d:%02d".format(hour, minute))
@@ -245,8 +264,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
             }
 
             try {
-                // The notes link opens its own Activity. Do not put a click action
-                // on the parent widget surface, which can consume child clicks.
+                // Each interactive area has its own action.
                 val notesIntent = Intent(context, NotesActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
@@ -255,6 +273,26 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.tv_notes_link, notesPi)
+
+                val settingsIntent = Intent(context, SettingsActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                val settingsPi = PendingIntent.getActivity(
+                    context, 2002, settingsIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.tv_time, settingsPi)
+
+                fun refreshPendingIntent(requestCode: Int): PendingIntent {
+                    val refreshIntent = Intent(context, ClockWidgetProvider::class.java)
+                        .setAction(ACTION_REFRESH)
+                    return PendingIntent.getBroadcast(
+                        context, requestCode, refreshIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                }
+                views.setOnClickPendingIntent(R.id.tv_hourly, refreshPendingIntent(2003))
+                views.setOnClickPendingIntent(R.id.tv_daily, refreshPendingIntent(2004))
             } catch (_: Exception) {}
 
             try {
