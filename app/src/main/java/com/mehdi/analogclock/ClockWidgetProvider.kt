@@ -194,7 +194,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 // Hourly — two forecast hours on each line
                 if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
                     val lines = weather.hourly.take(6).chunked(2).map { pair ->
-                        pair.asReversed().joinToString("     │     ") { item ->
+                        pair.asReversed().joinToString("  │  ") { item ->
                             val h = pd("%02d".format(item.hour))
                             val t = "${pd(item.temperature)}°"
                             val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
