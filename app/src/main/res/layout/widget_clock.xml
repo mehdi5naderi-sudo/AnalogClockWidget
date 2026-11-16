@@ -84,22 +84,26 @@
             android:textColor="#FFEEEEEE"
             android:textSize="11sp"
             android:lineSpacingExtra="3dp"
-            android:includeFontPadding="false" />
+            android:includeFontPadding="false" 
+            android:gravity="end"
+            android:textAlignment="viewEnd"/>
 
         <TextView
             android:id="@+id/tv_daily"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text=""
             android:textColor="#FFEEEEEE"
             android:textSize="11sp"
             android:lineSpacingExtra="2dp"
-            android:includeFontPadding="false" />
+            android:includeFontPadding="false" 
+            android:gravity="end"
+            android:textAlignment="viewEnd"/>
 
         <TextView
             android:id="@+id/tv_notes_link"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="📝 یادداشت‌ها"
@@ -108,7 +112,9 @@
             android:textStyle="bold"
             android:clickable="true"
             android:focusable="true"
-            android:includeFontPadding="false" />
+            android:includeFontPadding="false" 
+            android:gravity="end"
+            android:textAlignment="viewEnd"/>
 
     </LinearLayout>
 
