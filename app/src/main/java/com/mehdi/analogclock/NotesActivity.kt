@@ -69,7 +69,7 @@ class NotesActivity : Activity() {
             setPadding(0, 16, 0, 8)
         })
         val edit = EditText(this).apply {
-            setText(prefs.getString(key, "").orEmpty())
+            setText((prefs.getString(key, null) ?: if (key == "other_notes") prefs.getString("saved_notes", "") else "").orEmpty())
             hint = hintText
             setHintTextColor(0xFF8B9AAB.toInt())
             setTextColor(0xFFF3F5F7.toInt())
