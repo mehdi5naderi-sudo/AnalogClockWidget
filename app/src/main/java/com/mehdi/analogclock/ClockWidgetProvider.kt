@@ -198,7 +198,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                             val h = pd("%02d".format(item.hour))
                             val t = "${pd(item.temperature)}°"
                             val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
-                            "$h  $t  $r"
+                            "$h:  $t  $r"
                         }
                     }
                     views.setTextViewText(R.id.tv_hourly, lines.joinToString("\n"))
