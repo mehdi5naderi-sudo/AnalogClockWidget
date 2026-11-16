@@ -131,8 +131,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 applySize(R.id.tv_meta, "meta_size", 10f)
                 applySize(R.id.tv_dates, "date_size", 11f)
                 applySize(R.id.tv_solar, "label_size", 11f)
-                applySize(R.id.tv_hourly, "hourly_size", 11f)
-                applySize(R.id.tv_daily, "daily_size", 11f)
+                applySize(R.id.tv_hourly, "hourly_size", 14f)
+                applySize(R.id.tv_daily, "daily_size", 13f)
                 applySize(R.id.tv_notes_link, "notes_size", 12f)
 
                 // Clock time
