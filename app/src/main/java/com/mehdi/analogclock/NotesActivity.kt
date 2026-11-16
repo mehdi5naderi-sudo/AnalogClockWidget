@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -14,15 +15,21 @@ class NotesActivity : Activity() {
     private val prefs by lazy {
         getSharedPreferences("clock_widget_prefs", MODE_PRIVATE)
     }
-    private lateinit var editor: EditText
+    private val editors = linkedMapOf<String, EditText>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(28, 32, 28, 28)
+
+        val scroll = ScrollView(this).apply {
             setBackgroundColor(0xFF0B0F17.toInt())
         }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(28, 28, 28, 28)
+            setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL)
+        }
+        scroll.addView(root)
+
         root.addView(TextView(this).apply {
             text = "یادداشت‌ها"
             textSize = 22f
@@ -31,48 +38,68 @@ class NotesActivity : Activity() {
             setTextColor(0xFFFFC857.toInt())
             setPadding(0, 0, 0, 20)
         })
-        root.addView(TextView(this).apply {
-            text = "یادداشت‌هایت را بنویس؛ می‌توانی چندین یادداشت را در این صفحه نگه داری."
-            textSize = 14f
-            setTextColor(0xFFB8C2D1.toInt())
-            setPadding(0, 0, 0, 12)
-        })
-        editor = EditText(this).apply {
-            setText(prefs.getString("saved_notes", "").orEmpty())
-            hint = "یادداشت‌ها…"
-            setHintTextColor(0xFF8B9AAB.toInt())
-            setTextColor(0xFFF3F5F7.toInt())
-            textSize = 16f
-            gravity = Gravity.TOP or Gravity.START
-            minLines = 10
-            setPadding(18, 18, 18, 18)
-            setBackgroundColor(0xFF1E2738.toInt())
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        }
-        root.addView(editor, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+
+        addNoteSection(root, "card_notes", "کارت", "یادداشت‌های مربوط به کارت…")
+        addNoteSection(root, "installment_notes", "قسط", "مبلغ، تاریخ سررسید و جزئیات قسط…")
+        addNoteSection(root, "other_notes", "سایر", "سایر یادداشت‌ها…")
+
         root.addView(Button(this).apply {
-            text = "ذخیره یادداشت‌ها"
+            text = "ذخیره هر سه یادداشت"
             setTextColor(0xFF0B0F17.toInt())
             setBackgroundColor(0xFFFFC857.toInt())
             typeface = Typeface.DEFAULT_BOLD
             setOnClickListener {
-                prefs.edit().putString("saved_notes", editor.text.toString()).apply()
+                saveNotes()
                 Toast.makeText(this@NotesActivity, "یادداشت‌ها ذخیره شد", Toast.LENGTH_SHORT).show()
             }
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = 16 })
-        setContentView(root)
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = 18 })
+
+        setContentView(scroll)
+    }
+
+    private fun addNoteSection(root: LinearLayout, key: String, title: String, hintText: String) {
+        root.addView(TextView(this).apply {
+            text = title
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(0xFFFFC857.toInt())
+            setPadding(0, 16, 0, 8)
+        })
+        val edit = EditText(this).apply {
+            setText(prefs.getString(key, "").orEmpty())
+            hint = hintText
+            setHintTextColor(0xFF8B9AAB.toInt())
+            setTextColor(0xFFF3F5F7.toInt())
+            textSize = 16f
+            gravity = Gravity.TOP or Gravity.START
+            minLines = 4
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(0xFF1E2738.toInt())
+            textDirection = android.view.View.TEXT_DIRECTION_RTL
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        editors[key] = edit
+        root.addView(edit, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+    }
+
+    private fun saveNotes() {
+        val editor = prefs.edit()
+        editors.forEach { (key, field) ->
+            editor.putString(key, field.text.toString())
+        }
+        editor.apply()
     }
 
     override fun onPause() {
-        if (::editor.isInitialized) {
-            prefs.edit().putString("saved_notes", editor.text.toString()).apply()
-        }
+        if (editors.isNotEmpty()) saveNotes()
         super.onPause()
     }
 }
