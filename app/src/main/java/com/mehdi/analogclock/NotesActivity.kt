@@ -28,6 +28,7 @@ class NotesActivity : Activity() {
     private lateinit var tabRow: LinearLayout
     private val tabButtons = mutableListOf<Button>()
     private var selectedTab = 0
+    private var hasLoadedTab = false
 
     private data class NoteTab(
         val key: String,
@@ -131,7 +132,7 @@ class NotesActivity : Activity() {
     }
 
     private fun selectTab(index: Int) {
-        if (::editor.isInitialized && tabs.isNotEmpty()) saveCurrentNote()
+        if (hasLoadedTab) saveCurrentNote()
         selectedTab = index.coerceIn(tabs.indices)
         val tab = tabs[selectedTab]
         val saved = prefs.getString(tab.key, null)
@@ -139,6 +140,7 @@ class NotesActivity : Activity() {
         editor.setText(saved.orEmpty())
         editor.hint = tab.hint
         editorScroll.scrollTo(0, 0)
+        hasLoadedTab = true
 
         tabButtons.forEachIndexed { i, button ->
             val active = i == selectedTab
@@ -148,10 +150,11 @@ class NotesActivity : Activity() {
     }
 
     private fun saveCurrentNote() {
-        if (!::editor.isInitialized || tabs.isEmpty()) return
+        if (!hasLoadedTab || !::editor.isInitialized || tabs.isEmpty()) return
+        // commit() ensures the active tab is written before another tab is loaded.
         prefs.edit()
             .putString(tabs[selectedTab].key, editor.text.toString())
-            .apply()
+            .commit()
     }
 
     private fun dp(value: Int): Int =
