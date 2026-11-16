@@ -141,17 +141,8 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     parts.add("${pd(weather.temperature)}°")
                     val label = weatherLabel(weather.code)
                     if (label.isNotEmpty()) parts.add(label)
-                    if (weather.cloudCover.isNotBlank()) parts.add(weather.cloudCover)
                     // Always show wind
                     parts.add(if (weather.windSpeed > 0) "باد ${pd(weather.windSpeed)}" else "آرام")
-                    if (weather.visibility > 0) {
-                        val visTxt = when {
-                            weather.visibility >= 10000 -> ">۱۰کیلومتر"
-                            weather.visibility >= 1000 -> "${pd(weather.visibility / 1000)}کیلومتر"
-                            else -> "${pd(weather.visibility)}متر"
-                        }
-                        parts.add(visTxt)
-                    }
                     if (weather.usAqi >= 0) parts.add("AQI ${pd(weather.usAqi)}")
                     views.setTextViewText(R.id.tv_condition, parts.joinToString(" · "))
 
@@ -208,13 +199,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
                         val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
                         "$h   $t   $r"
                     }
-                    views.setTextViewText(R.id.tv_hourly, lines.joinToString("\n"))
+                    views.setTextViewText(R.id.tv_hourly, lines.filterIndexed { index, _ -> index % 2 == 0 }.joinToString("\n"))
+                    views.setTextViewText(R.id.tv_hourly2, lines.filterIndexed { index, _ -> index % 2 == 1 }.joinToString("\n"))
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
+                    views.setViewVisibility(R.id.tv_hourly2, View.VISIBLE)
                 } else if (showHourly) {
                     views.setTextViewText(R.id.tv_hourly, "…")
+                    views.setTextViewText(R.id.tv_hourly2, "")
                     views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
+                    views.setViewVisibility(R.id.tv_hourly2, View.VISIBLE)
                 } else {
                     views.setViewVisibility(R.id.tv_hourly, View.GONE)
+                    views.setViewVisibility(R.id.tv_hourly2, View.GONE)
                 }
 
                 // Daily — full weekday name, fixed DOW mapping
@@ -248,10 +244,17 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_dates, "")
                 views.setTextViewText(R.id.tv_solar, "")
                 views.setTextViewText(R.id.tv_hourly, "")
+                views.setTextViewText(R.id.tv_hourly2, "")
                 views.setTextViewText(R.id.tv_daily, "")
             }
 
             try {
+                val notesIntent = Intent(context, NotesActivity::class.java)
+                val notesPi = PendingIntent.getActivity(
+                    context, 2001, notesIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.tv_notes_link, notesPi)
                 val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
                 val pi = PendingIntent.getBroadcast(
                     context, 1002, intent,
