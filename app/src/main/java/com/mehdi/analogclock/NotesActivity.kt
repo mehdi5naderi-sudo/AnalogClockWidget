@@ -4,10 +4,10 @@ import android.app.Activity
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -15,20 +15,33 @@ class NotesActivity : Activity() {
     private val prefs by lazy {
         getSharedPreferences("clock_widget_prefs", MODE_PRIVATE)
     }
-    private val editors = linkedMapOf<String, EditText>()
+
+    private val tabs = listOf(
+        NoteTab("card_notes", "کارت", "یادداشت‌های مربوط به کارت…"),
+        NoteTab("installment_notes", "قسط", "مبلغ، تاریخ سررسید و جزئیات قسط…"),
+        NoteTab("other_notes", "سایر", "سایر یادداشت‌ها…")
+    )
+
+    private lateinit var editor: EditText
+    private lateinit var tabRow: LinearLayout
+    private val tabButtons = mutableListOf<Button>()
+    private var selectedTab = 0
+
+    private data class NoteTab(
+        val key: String,
+        val title: String,
+        val hint: String
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val scroll = ScrollView(this).apply {
-            setBackgroundColor(0xFF0B0F17.toInt())
-        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 28, 28, 28)
-            setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL)
+            setBackgroundColor(0xFF0B0F17.toInt())
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        scroll.addView(root)
 
         root.addView(TextView(this).apply {
             text = "یادداشت‌ها"
@@ -36,70 +49,97 @@ class NotesActivity : Activity() {
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(0xFFFFC857.toInt())
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 22)
         })
 
-        addNoteSection(root, "card_notes", "کارت", "یادداشت‌های مربوط به کارت…")
-        addNoteSection(root, "installment_notes", "قسط", "مبلغ، تاریخ سررسید و جزئیات قسط…")
-        addNoteSection(root, "other_notes", "سایر", "سایر یادداشت‌ها…")
-
-        root.addView(Button(this).apply {
-            text = "ذخیره هر سه یادداشت"
-            setTextColor(0xFF0B0F17.toInt())
-            setBackgroundColor(0xFFFFC857.toInt())
-            typeface = Typeface.DEFAULT_BOLD
-            setOnClickListener {
-                saveNotes()
-                Toast.makeText(this@NotesActivity, "یادداشت‌ها ذخیره شد", Toast.LENGTH_SHORT).show()
+        tabRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        tabs.forEachIndexed { index, tab ->
+            val button = Button(this).apply {
+                text = tab.title
+                isAllCaps = false
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(4, 8, 4, 8)
+                setOnClickListener { selectTab(index) }
             }
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = 18 })
+            tabButtons.add(button)
+            tabRow.addView(button, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                marginStart = dp(4)
+                marginEnd = dp(4)
+            })
+        }
+        root.addView(tabRow)
 
-        setContentView(scroll)
-    }
-
-    private fun addNoteSection(root: LinearLayout, key: String, title: String, hintText: String) {
-        root.addView(TextView(this).apply {
-            text = title
-            textSize = 17f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xFFFFC857.toInt())
-            setPadding(0, 16, 0, 8)
-        })
-        val edit = EditText(this).apply {
-            setText((prefs.getString(key, null) ?: if (key == "other_notes") prefs.getString("saved_notes", "") else "").orEmpty())
-            hint = hintText
+        editor = EditText(this).apply {
             setHintTextColor(0xFF8B9AAB.toInt())
             setTextColor(0xFFF3F5F7.toInt())
             textSize = 16f
             gravity = Gravity.TOP or Gravity.START
-            minLines = 4
-            setPadding(16, 16, 16, 16)
+            setPadding(18, 18, 18, 18)
             setBackgroundColor(0xFF1E2738.toInt())
-            textDirection = android.view.View.TEXT_DIRECTION_RTL
+            textDirection = View.TEXT_DIRECTION_RTL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
-        editors[key] = edit
-        root.addView(edit, LinearLayout.LayoutParams(
+        root.addView(editor, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ).apply {
+            topMargin = dp(16)
+            bottomMargin = dp(16)
+        })
+
+        root.addView(Button(this).apply {
+            text = "ذخیره یادداشت"
+            isAllCaps = false
+            setTextColor(0xFF0B0F17.toInt())
+            setBackgroundColor(0xFFFFC857.toInt())
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener {
+                saveCurrentNote()
+                Toast.makeText(this@NotesActivity, "یادداشت ذخیره شد", Toast.LENGTH_SHORT).show()
+            }
+        }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
+
+        setContentView(root)
+        selectTab(0)
     }
 
-    private fun saveNotes() {
-        val editor = prefs.edit()
-        editors.forEach { (key, field) ->
-            editor.putString(key, field.text.toString())
+    private fun selectTab(index: Int) {
+        if (::editor.isInitialized && tabs.isNotEmpty()) saveCurrentNote()
+        selectedTab = index.coerceIn(tabs.indices)
+        val tab = tabs[selectedTab]
+        val saved = prefs.getString(tab.key, null)
+            ?: if (tab.key == "other_notes") prefs.getString("saved_notes", "") else ""
+        editor.setText(saved.orEmpty())
+        editor.hint = tab.hint
+
+        tabButtons.forEachIndexed { i, button ->
+            val active = i == selectedTab
+            button.setTextColor(if (active) 0xFF0B0F17.toInt() else 0xFFF3F5F7.toInt())
+            button.setBackgroundColor(if (active) 0xFFFFC857.toInt() else 0xFF2A3548.toInt())
         }
-        editor.apply()
     }
+
+    private fun saveCurrentNote() {
+        if (!::editor.isInitialized || tabs.isEmpty()) return
+        prefs.edit()
+            .putString(tabs[selectedTab].key, editor.text.toString())
+            .apply()
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     override fun onPause() {
-        if (editors.isNotEmpty()) saveNotes()
+        saveCurrentNote()
         super.onPause()
     }
 }
