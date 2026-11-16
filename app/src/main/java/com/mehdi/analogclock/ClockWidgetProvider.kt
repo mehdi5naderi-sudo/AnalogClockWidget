@@ -249,18 +249,16 @@ class ClockWidgetProvider : AppWidgetProvider() {
             }
 
             try {
-                val notesIntent = Intent(context, NotesActivity::class.java)
+                // The notes link opens its own Activity. Do not put a click action
+                // on the parent widget surface, which can consume child clicks.
+                val notesIntent = Intent(context, NotesActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
                 val notesPi = PendingIntent.getActivity(
                     context, 2001, notesIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.tv_notes_link, notesPi)
-                val intent = Intent(context, ClockWidgetProvider::class.java).setAction(ACTION_REFRESH)
-                val pi = PendingIntent.getBroadcast(
-                    context, 1002, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, pi)
             } catch (_: Exception) {}
 
             try {
