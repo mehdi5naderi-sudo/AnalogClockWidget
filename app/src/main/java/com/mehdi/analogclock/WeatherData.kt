@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Weather sources:
  * - Open-Meteo Forecast API: current conditions, wind, hourly and daily forecasts
- * - Open-Meteo Air Quality API: US AQI
+ * - IQAir AirVisual API: US AQI
  */
 object WeatherData {
     private const val PREFS = "clock_widget_prefs"
@@ -22,6 +22,9 @@ object WeatherData {
     private const val KEY_ATTEMPT = "weather_attempt_at"
     private const val KEY_JSON = "weather_compact_v6"
     private val fetching = AtomicBoolean(false)
+
+    // کلید API رایگان IQAir را اینجا بگذار (از https://dashboard.iqair.com)
+    private const val IQAIR_API_KEY = "YOUR_API_KEY_HERE"
 
     data class HourlyItem(
         val hour: Int,
@@ -46,7 +49,7 @@ object WeatherData {
         val min: Int,
         val rain: Int,
         val windSpeed: Int,       // km/h from Open-Meteo
-        val usAqi: Int,           // from Open-Meteo AQ
+        val usAqi: Int,           // from IQAir AirVisual
         val obsTime: String,      // Open-Meteo current observation time HH:mm
         val hourly: List<HourlyItem>,
         val daily: List<DailyItem>,
@@ -165,9 +168,11 @@ object WeatherData {
     }
 
     private fun fetchUsAqi(lat: Double, lon: Double): Int {
+        if (IQAIR_API_KEY == "YOUR_API_KEY_HERE" || IQAIR_API_KEY.isBlank()) return -1
+
         val url = URL(
-            "https://air-quality-api.open-meteo.com/v1/air-quality" +
-                "?latitude=$lat&longitude=$lon&current=us_aqi"
+            "https://api.airvisual.com/v2/nearest_city" +
+                "?lat=$lat&lon=$lon&key=$IQAIR_API_KEY"
         )
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -180,7 +185,11 @@ object WeatherData {
             if (conn.responseCode !in 200..299) return -1
             val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val root = JSONObject(body)
-            return root.optJSONObject("current")?.optInt("us_aqi", -1) ?: -1
+            if (root.optString("status") != "success") return -1
+            return root.optJSONObject("data")
+                ?.optJSONObject("current")
+                ?.optJSONObject("pollution")
+                ?.optInt("aqius", -1) ?: -1
         } finally {
             conn.disconnect()
         }
@@ -340,8 +349,7 @@ object WeatherData {
                     fConn.disconnect()
                 }
 
-                // 2) US AQI from Open-Meteo Air Quality API
-                // US AQI
+                // 2) US AQI from IQAir AirVisual
                 var usAqi = -1
                 try {
                     usAqi = fetchUsAqi(lat, lon)
