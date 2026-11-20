@@ -25,6 +25,7 @@ class SettingsActivity : Activity() {
     private val seekBars = mutableMapOf<String, Pair<SeekBar, Int>>()
     private var latEdit: EditText? = null
     private var lonEdit: EditText? = null
+    private var apiKeyEdit: EditText? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,6 +65,20 @@ class SettingsActivity : Activity() {
         root.addView(sectionTitle("آب‌وهوا"))
         addSwitch(root, "weather_enabled", "فعال بودن آب‌وهوا", true)
         addSeek(root, "weather_refresh_min", "فاصله به‌روزرسانی (دقیقه)", 15, 120, 30)
+
+        root.addView(hint("کلید API سرویس IQAir (برای شاخص آلودگی هوا)"))
+        root.addView(hint("از dashboard.iqair.com بگیرید · خالی = AQI نشان داده نمی‌شود"))
+        apiKeyEdit = EditText(this).apply {
+            setText(prefs.getString("iqair_api_key", ""))
+            hint = "YOUR_API_KEY"
+            setTextColor(0xFFF3F5F7.toInt())
+            setHintTextColor(0xFF8B9AAB.toInt())
+            setBackgroundColor(0xFF1E2738.toInt())
+            setPadding(24, 20, 24, 20)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        root.addView(apiKeyEdit)
 
         root.addView(sectionTitle("مکان (پیش‌فرض پونک)"))
         root.addView(hint("عرض جغرافیایی (latitude)"))
@@ -162,7 +177,7 @@ class SettingsActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "نسخه $versionName  ·  build $versionCode\nOpen-Meteo · بدون نیاز به کلید API"
+            text = "نسخه $versionName  ·  build $versionCode\nآب‌وهوا: Open-Meteo  ·  AQI: IQAir"
             textSize = 12f
             setTextColor(0xFF8B9AAB.toInt())
             gravity = Gravity.CENTER
@@ -274,6 +289,14 @@ class SettingsActivity : Activity() {
         val lon = lonEdit?.text?.toString()?.trim().orEmpty()
         if (lat.isNotEmpty()) editor.putString("location_lat", lat) else editor.remove("location_lat")
         if (lon.isNotEmpty()) editor.putString("location_lon", lon) else editor.remove("location_lon")
+
+        val apiKey = apiKeyEdit?.text?.toString()?.trim().orEmpty()
+        if (apiKey.isNotEmpty()) {
+            editor.putString("iqair_api_key", apiKey)
+        } else {
+            editor.remove("iqair_api_key")
+        }
+
         editor.commit()
 
         WeatherData.invalidate(this)

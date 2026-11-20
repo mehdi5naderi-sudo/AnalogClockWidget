@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Weather sources:
  * - Open-Meteo Forecast API: current conditions, wind, hourly and daily forecasts
- * - IQAir AirVisual API: US AQI
+ * - IQAir AirVisual API: US AQI (key from settings)
  */
 object WeatherData {
     private const val PREFS = "clock_widget_prefs"
@@ -22,9 +22,6 @@ object WeatherData {
     private const val KEY_ATTEMPT = "weather_attempt_at"
     private const val KEY_JSON = "weather_compact_v6"
     private val fetching = AtomicBoolean(false)
-
-    // کلید API رایگان IQAir را اینجا بگذار (از https://dashboard.iqair.com)
-    private const val IQAIR_API_KEY = "YOUR_API_KEY_HERE"
 
     data class HourlyItem(
         val hour: Int,
@@ -167,12 +164,12 @@ object WeatherData {
             .commit()
     }
 
-    private fun fetchUsAqi(lat: Double, lon: Double): Int {
-        if (IQAIR_API_KEY == "YOUR_API_KEY_HERE" || IQAIR_API_KEY.isBlank()) return -1
+    private fun fetchUsAqi(lat: Double, lon: Double, apiKey: String): Int {
+        if (apiKey.isBlank()) return -1
 
         val url = URL(
             "https://api.airvisual.com/v2/nearest_city" +
-                "?lat=$lat&lon=$lon&key=$IQAIR_API_KEY"
+                "?lat=$lat&lon=$lon&key=$apiKey"
         )
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -303,6 +300,7 @@ object WeatherData {
         val lon = p.getString("location_lon", null)?.toDoubleOrNull() ?: SolarCalculator.LONGITUDE
         val tz = (p.getString("location_tz", null) ?: SolarCalculator.TIME_ZONE)
             .ifBlank { SolarCalculator.TIME_ZONE }
+        val apiKey = p.getString("iqair_api_key", "") ?: ""
 
         Thread {
             try {
@@ -349,10 +347,10 @@ object WeatherData {
                     fConn.disconnect()
                 }
 
-                // 2) US AQI from IQAir AirVisual
+                // 2) US AQI from IQAir AirVisual (key from settings)
                 var usAqi = -1
                 try {
-                    usAqi = fetchUsAqi(lat, lon)
+                    usAqi = fetchUsAqi(lat, lon, apiKey)
                 } catch (_: Exception) {}
 
                 if (hourlyList.size < 3 && dailyList.isEmpty()) return@Thread
