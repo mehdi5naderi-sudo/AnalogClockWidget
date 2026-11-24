@@ -131,8 +131,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 applySize(R.id.tv_meta, "meta_size", 10f)
                 applySize(R.id.tv_dates, "date_size", 11f)
                 applySize(R.id.tv_solar, "label_size", 11f)
-                applySize(R.id.tv_hourly, "hourly_size", 14f)
-                applySize(R.id.tv_daily, "daily_size", 13f)
                 applySize(R.id.tv_notes_link, "notes_size", 12f)
 
                 // Clock time
@@ -150,7 +148,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
 
                 // Weather
                 var weather = try { WeatherData.read(context) } catch (_: Exception) { null }
-                val needForce = weather == null || weather.hourly.isEmpty() || weather.daily.isEmpty()
+                val needForce = weather == null
                 try { WeatherData.refreshIfNeeded(context, force = needForce) } catch (_: Exception) {}
                 weather = try { WeatherData.read(context) } catch (_: Exception) { null }
 
@@ -210,47 +208,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.tv_solar, View.GONE)
                 }
 
-                // Hourly — two forecast hours on each line
-                if (showHourly && weather != null && weather.hourly.isNotEmpty()) {
-                    val lines = weather.hourly.take(6).chunked(2).map { pair ->
-                        pair.asReversed().joinToString("  │  ") { item ->
-                            val h = pd("%02d".format(item.hour))
-                            val t = "${pd(item.temperature)}°"
-                            val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
-                            "$r  $t  :$h"
-                        }
-                    }
-                    views.setTextViewText(R.id.tv_hourly, lines.joinToString("\n"))
-                    views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
-                } else if (showHourly) {
-                    views.setTextViewText(R.id.tv_hourly, "…")
-                    views.setViewVisibility(R.id.tv_hourly, View.VISIBLE)
-                } else {
-                    views.setViewVisibility(R.id.tv_hourly, View.GONE)
-                }
-
-                // Daily — full weekday name, fixed DOW mapping
-                // Calendar: Sun=1 .. Sat=7  →  list index: Sat=0, Sun=1, ... Fri=6
-                // index = dayOfWeek % 7
-                if (showDaily && weather != null && weather.daily.isNotEmpty()) {
-                    val fullNames = listOf(
-                        "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"
-                    )
-                    val startIdx = dayOfWeek % 7
-                    val lines = weather.daily.take(3).mapIndexed { index, item ->
-                        val name = fullNames.getOrElse((startIdx + index) % 7) { "·" }
-                        val temps = "${pd(item.max)}/${pd(item.min)}"
-                        val r = if (item.rainProb > 0) pd("${item.rainProb}٪") else "—"
-                        "$name  $temps  $r"
-                    }
-                    views.setTextViewText(R.id.tv_daily, lines.joinToString("\n"))
-                    views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
-                } else if (showDaily) {
-                    views.setTextViewText(R.id.tv_daily, "…")
-                    views.setViewVisibility(R.id.tv_daily, View.VISIBLE)
-                } else {
-                    views.setViewVisibility(R.id.tv_daily, View.GONE)
-                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "update content", e)
@@ -259,8 +216,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.tv_meta, "")
                 views.setTextViewText(R.id.tv_dates, "")
                 views.setTextViewText(R.id.tv_solar, "")
-                views.setTextViewText(R.id.tv_hourly, "")
-                views.setTextViewText(R.id.tv_daily, "")
             }
 
             try {
@@ -291,8 +246,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                 }
-                views.setOnClickPendingIntent(R.id.tv_hourly, refreshPendingIntent(2003))
-                views.setOnClickPendingIntent(R.id.tv_daily, refreshPendingIntent(2004))
+                views.setOnClickPendingIntent(R.id.tv_condition, refreshPendingIntent(2003))
             } catch (_: Exception) {}
 
             try {
