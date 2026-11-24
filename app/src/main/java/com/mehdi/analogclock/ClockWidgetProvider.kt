@@ -95,8 +95,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val showJalali = p.getBoolean("show_jalali", true)
                 val showGregorian = p.getBoolean("show_gregorian", true)
                 val showSolar = p.getBoolean("show_solar", true)
-                val showHourly = p.getBoolean("show_hourly", true)
-                val showDaily = p.getBoolean("show_daily", true)
                 val use24h = p.getBoolean("use_24h", true)
                 val backgroundAlpha = p.getFloat("background_alpha", 100f).coerceIn(0f, 100f)
 
@@ -126,12 +124,12 @@ class ClockWidgetProvider : AppWidgetProvider() {
                         size
                     )
                 }
-                applySize(R.id.tv_time, "digital_clock_size", 28f)
-                applySize(R.id.tv_condition, "condition_size", 12f)
-                applySize(R.id.tv_meta, "meta_size", 10f)
-                applySize(R.id.tv_dates, "date_size", 11f)
-                applySize(R.id.tv_solar, "label_size", 11f)
-                applySize(R.id.tv_notes_link, "notes_size", 12f)
+                applySize(R.id.tv_time, "digital_clock_size", 34f)
+                applySize(R.id.tv_condition, "condition_size", 10f)
+                applySize(R.id.tv_meta, "meta_size", 8f)
+                applySize(R.id.tv_dates, "date_size", 9f)
+                applySize(R.id.tv_solar, "label_size", 9f)
+                applySize(R.id.tv_notes_link, "notes_size", 9f)
 
                 // Clock time
                 val timeText = if (use24h) {
