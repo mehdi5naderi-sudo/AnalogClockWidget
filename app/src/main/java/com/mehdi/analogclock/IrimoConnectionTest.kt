@@ -61,10 +61,10 @@ object IrimoConnectionTest {
                         "https://www.irimo.ir/far/index.php?module=web_directory&wd_id=701&id=$id",
                         browserHeaders = true
                     )
-                    val visibility = Regex("دید\\s*افقی").containsMatchIn(detail.body)
                     log(format("۶) صفحه جزئیات تهران (شناسه $id)", detail) +
-                        "وجود عبارت «دید افقی»: ${if (visibility) "بله" else "خیر"}\n" +
-                        "نشانه صفحه هواشناسی: ${if (detail.body.contains("divCurrentWeather")) "یافت شد" else "یافت نشد"}")
+                        "\\n" + analyzeWeatherPage("صفحه تهران", detail.body))
+                    log("۷) لینک‌ها و بخش‌های هواشناسی قابل کشف در صفحه اصلی\\n" +
+                        discoverWeatherLinks(browser.body))
                 } else {
                     log("۶) صفحه جزئیات تهران\nشناسه تهران از صفحه اصلی پیدا نشد؛ متن صفحه برای بررسی در گزارش بالا خلاصه نشده است.")
                 }
@@ -197,6 +197,79 @@ object IrimoConnectionTest {
                 ?.joinToString(", ")
             if (!sans.isNullOrBlank()) append("نام‌های دامنه: ").append(sans).append("\\n")
             append("\\n")
+        }
+    }
+
+
+    private fun htmlToText(html: String): String {
+        return html
+            .replace(Regex("(?is)<script[^>]*>.*?</script>"), " ")
+            .replace(Regex("(?is)<style[^>]*>.*?</style>"), " ")
+            .replace(Regex("(?i)<br\\s*/?>|</(td|th|tr|li|p|div|h[1-6])\\s*>"), "\n")
+            .replace(Regex("<[^>]+>"), " ")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace(Regex("&#(\\d+);")) { m ->
+                m.groupValues[1].toIntOrNull()?.toChar()?.toString() ?: " "
+            }
+            .replace(Regex("[\\t ]+"), " ")
+            .replace(Regex(" *\\n *"), "\n")
+            .trim()
+    }
+
+    private fun analyzeWeatherPage(label: String, html: String): String {
+        if (html.isBlank()) return "تحلیل صفحه: پاسخ خالی است."
+        val keywords = listOf(
+            "دید افقی", "دمای هوا", "دما", "رطوبت نسبی", "رطوبت", "فشار",
+            "سرعت باد", "جهت باد", "باد", "بارندگی", "بارش", "وضع هوای",
+            "وضعیت هوا", "ابر", "نقطه شبنم", "حداقل", "حداکثر",
+            "visibility", "temperature", "humidity", "pressure", "wind", "precipitation"
+        )
+        val text = htmlToText(html)
+        val rows = Regex("(?is)<tr\\b[^>]*>.*?</tr>").findAll(html)
+            .map { htmlToText(it.value) }
+            .filter { row -> keywords.any { row.contains(it, ignoreCase = true) } }
+            .distinct()
+            .take(30)
+            .toList()
+        val snippets = keywords.mapNotNull { key ->
+            val idx = text.indexOf(key, ignoreCase = true)
+            if (idx < 0) null else {
+                val startAt = maxOf(0, idx - 100)
+                val endAt = minOf(text.length, idx + key.length + 180)
+                "$key: " + text.substring(startAt, endAt).replace("\n", " | ")
+            }
+        }.distinct().take(24)
+        return buildString {
+            append("تحلیل ").append(label).append("\n")
+            val title = Regex("(?is)<title[^>]*>(.*?)</title>").find(html)?.groupValues?.getOrNull(1)
+            append("عنوان صفحه: ").append(title?.let { htmlToText(it) }?.take(180) ?: "پیدا نشد").append("\n")
+            append("طول متن قابل خواندن: ").append(text.length).append(" نویسه\n")
+            append("ردیف‌های جدول مرتبط: ").append(rows.size).append("\n")
+            if (rows.isNotEmpty()) rows.forEachIndexed { i, row ->
+                append("ردیف ").append(i + 1).append(": ").append(row.take(500)).append("\n")
+            } else append("ردیف جدول دارای کلیدواژه پیدا نشد.\n")
+            append("موارد و مقادیر اطراف کلیدواژه‌ها:\n")
+            if (snippets.isEmpty()) append("هیچ‌کدام\n")
+            else snippets.forEach { append("- ").append(it.take(360)).append("\n") }
+        }
+    }
+
+    private fun discoverWeatherLinks(html: String): String {
+        val terms = listOf("هوا", "هواشناسی", "پیش بینی", "پیش‌بینی", "هشدار", "ایستگاه",
+            "تهران", "بارش", "نقشه", "اقلیم", "weather", "forecast", "warning", "station")
+        val links = Regex("(?is)<a\\b[^>]*href=[\\\"']([^\\\"']+)[\\\"'][^>]*>(.*?)</a>")
+            .findAll(html)
+            .map { m -> m.groupValues[1].trim() to htmlToText(m.groupValues[2]) }
+            .filter { (url, linkLabel) -> terms.any { url.contains(it, true) || linkLabel.contains(it, true) } }
+            .distinct()
+            .take(35)
+            .toList()
+        return if (links.isEmpty()) "لینک مرتبطی پیدا نشد."
+        else links.joinToString("\n") { (url, linkLabel) ->
+            "- \${linkLabel.take(100)} => \${url.take(240)}"
         }
     }
 
