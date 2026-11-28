@@ -6,13 +6,11 @@ import android.content.ComponentName
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -27,8 +25,6 @@ class SettingsActivity : Activity() {
     private val seekBars = mutableMapOf<String, Pair<SeekBar, Int>>()
     private var latEdit: EditText? = null
     private var lonEdit: EditText? = null
-    private var stationSpinner: Spinner? = null
-    private var stations: List<IrimoWeatherData.Station> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,18 +73,8 @@ class SettingsActivity : Activity() {
             }
         })
 
-        root.addView(sectionTitle("ایستگاه هواشناسی"))
-        root.addView(hint("اطلاعات ویجت مستقیماً از سازمان هواشناسی ایران دریافت می‌شود."))
-        stationSpinner = Spinner(this).apply {
-            setBackgroundColor(0xFF1E2738.toInt())
-        }
-        root.addView(stationSpinner)
-        root.addView(Button(this).apply {
-            text = "بارگذاری فهرست ایستگاه‌ها"
-            setTextColor(0xFFF3F5F7.toInt())
-            setBackgroundColor(0xFF2A3548.toInt())
-            setOnClickListener { loadStations() }
-        })
+        root.addView(sectionTitle("هواشناسی"))
+        root.addView(hint("منبع داده‌ها: ایستگاه هواشناسی تهران — IRIMO"))
         addSeek(root, "irimo_refresh_min", "فاصله به‌روزرسانی هوا (دقیقه)", 5, 120, 15)
 
         root.addView(sectionTitle("رفتار ویجت"))
@@ -153,19 +139,6 @@ class SettingsActivity : Activity() {
         })
 
         setContentView(scroll)
-        loadStations()
-    }
-
-    private fun loadStations() {
-        IrimoWeatherData.loadStations(this) { list ->
-            stations = list
-            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, list)
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            stationSpinner?.adapter = adapter
-            val saved = prefs.getString("irimo_station_url", null)
-            val index = list.indexOfFirst { it.url == saved }.let { if (it >= 0) it else 0 }
-            if (list.isNotEmpty()) stationSpinner?.setSelection(index)
-        }
     }
 
     private fun editField(value: String): EditText = EditText(this).apply {
@@ -280,11 +253,9 @@ class SettingsActivity : Activity() {
         if (lat.isNotEmpty()) editor.putString("location_lat", lat) else editor.remove("location_lat")
         if (lon.isNotEmpty()) editor.putString("location_lon", lon) else editor.remove("location_lon")
 
-        val station = stations.getOrNull(stationSpinner?.selectedItemPosition ?: 0)
-        if (station != null) {
-            editor.putString("irimo_station_url", station.url)
-            editor.putString("irimo_station_name", station.name)
-        }
+        // Force the weather source to Tehran, removing old station selections.
+        editor.remove("irimo_station_url")
+        editor.remove("irimo_station_name")
 
         // Remove all legacy Open-Meteo / IQAir weather values and settings.
         listOf(
