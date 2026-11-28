@@ -7,9 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import java.net.HttpURLConnection
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -197,7 +194,7 @@ object IrimoWeatherData {
             .replace("&nbsp;", " ")
             .replace("&zwnj;", "‌")
             .replace("&amp;", "&")
-            .replace("&quot;", "\\"")
+            .replace("&quot;", "\"")
             .replace("&#39;", "'")
             .replace(Regex("[\\t ]+"), " ")
             .replace(Regex(" *\\n *"), "\\n")
