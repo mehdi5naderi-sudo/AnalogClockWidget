@@ -3,8 +3,6 @@
 -keep class com.mehdi.analogclock.SettingsActivity { *; }
 
 # Keep weather and solar helpers
--keep class com.mehdi.analogclock.WeatherData { *; }
--keep class com.mehdi.analogclock.WeatherData$* { *; }
 -keep class com.mehdi.analogclock.SolarCalculator { *; }
 -keep class com.mehdi.analogclock.SolarCalculator$* { *; }
 
