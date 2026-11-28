@@ -179,7 +179,7 @@ object IrimoConnectionTest {
             .toList()
         return if (links.isEmpty()) "لینک مرتبطی پیدا نشد."
         else links.joinToString("\n") { (url, linkLabel) ->
-            "- \${linkLabel.take(100)} => \${url.take(240)}"
+            "- ${linkLabel.take(100)} => ${url.take(240)}"
         }
     }
 
