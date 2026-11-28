@@ -42,20 +42,34 @@ object IrimoWeatherData {
         )
     }
 
-    fun refreshIfNeeded(context: Context, force: Boolean = false) {
+    fun refreshIfNeeded(
+        context: Context,
+        force: Boolean = false,
+        onComplete: ((String) -> Unit)? = null
+    ) {
         val app = context.applicationContext
         val p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val interval = p.getInt("irimo_refresh_min", 15).coerceIn(5, 120) * 60_000L
-        if (!force && now - p.getLong(KEY_FETCHED, 0L) < interval) return
-        if (!fetching.compareAndSet(false, true)) return
+        if (!force && now - p.getLong(KEY_FETCHED, 0L) < interval) {
+            onComplete?.let { callback ->
+                main.post { callback(p.getString("irimo_last_status", "اطلاعات قبلی هنوز معتبر است").orEmpty()) }
+            }
+            return
+        }
+        if (!fetching.compareAndSet(false, true)) {
+            onComplete?.let { callback -> main.post { callback("درخواست قبلی هنوز در حال اجراست؛ چند ثانیه بعد دوباره بزنید.") } }
+            return
+        }
 
         // Always use Tehran; ignore any station selection saved by older versions.
         p.edit().remove("irimo_station_url").remove("irimo_station_name").apply()
         val stationUrl = TEHRAN
         Thread {
+            var resultMessage: String
             try {
-                val snapshot = parseStation(get(stationUrl))
+                val html = get(stationUrl)
+                val snapshot = parseStation(html)
                 if (snapshot != null) {
                     p.edit()
                         .putInt("irimo_temperature", snapshot.temperature)
@@ -66,6 +80,7 @@ object IrimoWeatherData {
                         .putString("irimo_update_time", snapshot.updateTime)
                         .putLong(KEY_FETCHED, System.currentTimeMillis())
                         .apply()
+                    resultMessage = "دریافت موفق از تهران: دما \${snapshot.temperature}°، کمینه \${snapshot.minimum}°، بیشینه \${snapshot.maximum}°، دید \${snapshot.visibilityMeters} متر، باد \${snapshot.windMetersPerSecond} متر/ثانیه؛ ساعت منبع \${snapshot.updateTime.ifBlank { "در صفحه پیدا نشد" }}"
                     main.post {
                         val manager = AppWidgetManager.getInstance(app)
                         val ids = manager.getAppWidgetIds(
@@ -74,13 +89,22 @@ object IrimoWeatherData {
                         if (ids.isNotEmpty()) ClockWidgetProvider.update(app, manager, ids)
                     }
                 } else {
+                    val visible = clean(html)
+                    val title = Regex("(?is)<title[^>]*>(.*?)</title>").find(html)
+                        ?.groupValues?.get(1)?.let { clean(it) }?.take(100).orEmpty()
+                    val found = listOf("هوای حاضر", "دمای فعلی", "دمای کنونی", "دید افقی", "سرعت باد", "آخرین بروز رسانی")
+                        .filter { visible.contains(it, true) }
+                    resultMessage = "اتصال به IRIMO برقرار شد (HTTP 200، \${html.length} نویسه)، اما دمای فعلی استخراج نشد. عنوان صفحه: \${title.ifBlank { "ندارد" }}. عبارت‌های پیدا شده: \${found.joinToString("، ").ifBlank { "هیچ‌کدام" }}"
                     p.edit().putLong(KEY_FETCHED, System.currentTimeMillis() - interval + 60_000L).apply()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                resultMessage = "خطای دریافت IRIMO: \${e.javaClass.simpleName}: \${e.message ?: "بدون توضیح"}"
                 p.edit().putLong(KEY_FETCHED, System.currentTimeMillis() - interval + 60_000L).apply()
             } finally {
                 fetching.set(false)
             }
+            p.edit().putString("irimo_last_status", resultMessage).apply()
+            onComplete?.let { callback -> main.post { callback(resultMessage) } }
         }.apply {
             name = "IRIMOWeatherFetch"
             isDaemon = true
