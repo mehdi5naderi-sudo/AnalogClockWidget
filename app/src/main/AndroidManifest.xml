@@ -8,7 +8,8 @@
     <application
         android:theme="@style/AppTheme"
         android:label="ساعت و هوا"
-        android:icon="@drawable/ic_clock_settings">
+        android:icon="@drawable/ic_clock_settings"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
             android:name=".NotesActivity"
