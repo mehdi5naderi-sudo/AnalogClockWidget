@@ -26,6 +26,14 @@ object IrimoConnectionTest {
 
             log("شروع آزمایش مستقیم IRIMO\nزمان گوشی: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
 
+            // Control endpoints: compare the phone's trusted TLS path with services
+            // that have previously worked in the user's TGJU widget.
+            val tgju = request("https://call1.tgju.org/ajax.json", browserHeaders = true)
+            log(format("کنترل ۱) منبع TGJU (اتصال مقایسه‌ای)", tgju))
+
+            val tsetmc = request("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPrice", browserHeaders = true)
+            log(format("کنترل ۲) دامنه TSETMC (اتصال مقایسه‌ای)", tsetmc))
+
             val base = "https://www.irimo.ir/far/index.php"
             val first = request(base, browserHeaders = false)
             log(format("۱) HTTPS ساده (بدون هدر مرورگر)", first))
