@@ -189,7 +189,7 @@ object IrimoWeatherData {
 
     private fun clean(html: String): String =
         html.replace(Regex("(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>"), " ")
-            .replace(Regex("(?i)<br\\s*/?>|</(td|th|tr|li|p|div|h[1-6])\\s*>"), "\\n")
+            .replace(Regex("(?i)<br\\s*/?>|</(td|th|tr|li|p|div|h[1-6])\\s*>"), "\n")
             .replace(Regex("<[^>]+>"), " ")
             .replace("&nbsp;", " ")
             .replace("&zwnj;", "‌")
