@@ -46,7 +46,7 @@ object IrimoConnectionTest {
                         "https://www.irimo.ir/far/index.php?module=web_directory&wd_id=701&id=$id",
                         browserHeaders = true
                     )
-                    val visibility = Regex("دید\\s*افقی").containsMatchIn(detail.body)
+                    val visibility = Regex("دید\s*افقی").containsMatchIn(detail.body)
                     log(format("۵) صفحه جزئیات تهران (شناسه $id)", detail) +
                         "وجود عبارت «دید افقی»: ${if (visibility) "بله" else "خیر"}\n" +
                         "نشانه صفحه هواشناسی: ${if (detail.body.contains("divCurrentWeather")) "یافت شد" else "یافت نشد"}")
@@ -105,9 +105,9 @@ object IrimoConnectionTest {
 
     private fun findTehranId(html: String): String? {
         val patterns = listOf(
-            Regex("""<a[^>]+href=["'][^"']*[?&]id=(\\d+)[^"']*["'][^>]*>\\s*(?:<[^>]+>\\s*)*تهران"""),
-            Regex("""تهران.{0,300}?[?&]id=(\\d+)""", RegexOption.DOT_MATCHES_ALL),
-            Regex("""[?&]id=(\\d+)[^>]{0,200}>[^<]*تهران""")
+            Regex("""<a[^>]+href=["'][^"']*[?&]id=(\d+)[^"']*["'][^>]*>\s*(?:<[^>]+>\s*)*تهران"""),
+            Regex("""تهران.{0,300}?[?&]id=(\d+)""", RegexOption.DOT_MATCHES_ALL),
+            Regex("""[?&]id=(\d+)[^>]{0,200}>[^<]*تهران""")
         )
         return patterns.firstNotNullOfOrNull { it.find(html)?.groupValues?.getOrNull(1) }
     }
