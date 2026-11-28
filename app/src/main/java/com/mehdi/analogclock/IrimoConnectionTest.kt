@@ -54,7 +54,7 @@ object IrimoConnectionTest {
                         "https://www.irimo.ir/far/index.php?module=web_directory&wd_id=701&id=$id",
                         browserHeaders = true
                     )
-                    val visibility = Regex("دید\s*افقی").containsMatchIn(detail.body)
+                    val visibility = Regex("دید\\s*افقی").containsMatchIn(detail.body)
                     log(format("۵) صفحه جزئیات تهران (شناسه $id)", detail) +
                         "وجود عبارت «دید افقی»: ${if (visibility) "بله" else "خیر"}\n" +
                         "نشانه صفحه هواشناسی: ${if (detail.body.contains("divCurrentWeather")) "یافت شد" else "یافت نشد"}")
