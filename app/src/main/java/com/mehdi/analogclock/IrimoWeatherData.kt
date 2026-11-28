@@ -80,7 +80,7 @@ object IrimoWeatherData {
                         .putString("irimo_update_time", snapshot.updateTime)
                         .putLong(KEY_FETCHED, System.currentTimeMillis())
                         .apply()
-                    resultMessage = "دریافت موفق از تهران: دما \${snapshot.temperature}°، کمینه \${snapshot.minimum}°، بیشینه \${snapshot.maximum}°، دید \${snapshot.visibilityMeters} متر، باد \${snapshot.windMetersPerSecond} متر/ثانیه؛ ساعت منبع \${snapshot.updateTime.ifBlank { "در صفحه پیدا نشد" }}"
+                    resultMessage = "دریافت موفق از تهران: دما ${snapshot.temperature}°، کمینه ${snapshot.minimum}°، بیشینه ${snapshot.maximum}°، دید ${snapshot.visibilityMeters} متر، باد ${snapshot.windMetersPerSecond} متر/ثانیه؛ ساعت منبع ${snapshot.updateTime.ifBlank { "در صفحه پیدا نشد" }}"
                     main.post {
                         val manager = AppWidgetManager.getInstance(app)
                         val ids = manager.getAppWidgetIds(
@@ -94,11 +94,11 @@ object IrimoWeatherData {
                         ?.groupValues?.get(1)?.let { clean(it) }?.take(100).orEmpty()
                     val found = listOf("هوای حاضر", "دمای فعلی", "دمای کنونی", "دید افقی", "سرعت باد", "آخرین بروز رسانی")
                         .filter { visible.contains(it, true) }
-                    resultMessage = "اتصال به IRIMO برقرار شد (HTTP 200، \${html.length} نویسه)، اما دمای فعلی استخراج نشد. عنوان صفحه: \${title.ifBlank { "ندارد" }}. عبارت‌های پیدا شده: \${found.joinToString("، ").ifBlank { "هیچ‌کدام" }}"
+                    resultMessage = "اتصال به IRIMO برقرار شد (HTTP 200، ${html.length} نویسه)، اما دمای فعلی استخراج نشد. عنوان صفحه: ${title.ifBlank { "ندارد" }}. عبارت‌های پیدا شده: ${found.joinToString("، ").ifBlank { "هیچ‌کدام" }}"
                     p.edit().putLong(KEY_FETCHED, System.currentTimeMillis() - interval + 60_000L).apply()
                 }
             } catch (e: Exception) {
-                resultMessage = "خطای دریافت IRIMO: \${e.javaClass.simpleName}: \${e.message ?: "بدون توضیح"}"
+                resultMessage = "خطای دریافت IRIMO: ${e.javaClass.simpleName}: ${e.message ?: "بدون توضیح"}"
                 p.edit().putLong(KEY_FETCHED, System.currentTimeMillis() - interval + 60_000L).apply()
             } finally {
                 fetching.set(false)
