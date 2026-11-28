@@ -26,6 +26,7 @@ class SettingsActivity : Activity() {
     private var latEdit: EditText? = null
     private var lonEdit: EditText? = null
     private var apiKeyEdit: EditText? = null
+    private var irimoTestResult: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,6 +113,37 @@ class SettingsActivity : Activity() {
                 lonEdit?.setText(SolarCalculator.LONGITUDE.toString())
             }
         })
+
+        root.addView(sectionTitle("آزمایش اتصال دید افقی IRIMO"))
+        root.addView(hint("این آزمایش با اتصال مستقیم اندروید انجام می‌شود، نه WebView؛ بنابراین CORS مرورگر دخالت ندارد. اعتبارسنجی SSL روشن می‌ماند."))
+        root.addView(Button(this).apply {
+            text = "اجرای همه تست‌های اتصال IRIMO"
+            setTextColor(0xFF0B0F17.toInt())
+            setBackgroundColor(0xFFFFC857.toInt())
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener {
+                irimoTestResult?.text = "آزمایش‌ها در حال اجرا هستند…"
+                IrimoConnectionTest.run(this@SettingsActivity) { report ->
+                    irimoTestResult?.text = report
+                }
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = 8 })
+        irimoTestResult = TextView(this).apply {
+            text = "هنوز آزمایشی اجرا نشده است."
+            textSize = 12f
+            setTextColor(0xFFF3F5F7.toInt())
+            setBackgroundColor(0xFF151D2A.toInt())
+            setPadding(20, 20, 20, 20)
+            setTextIsSelectable(true)
+            typeface = Typeface.MONOSPACE
+        }
+        root.addView(irimoTestResult, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = 10 })
 
         root.addView(sectionTitle("رفتار ویجت"))
         addSeek(root, "tick_interval_min", "فاصله تازه‌سازی ساعت (دقیقه)", 1, 15, 1)
