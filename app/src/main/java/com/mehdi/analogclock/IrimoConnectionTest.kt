@@ -26,14 +26,6 @@ object IrimoConnectionTest {
 
             log("شروع آزمایش مستقیم IRIMO\nزمان گوشی: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
 
-            // Control endpoints: compare the phone's trusted TLS path with services
-            // that have previously worked in the user's TGJU widget.
-            val tgju = request("https://call1.tgju.org/ajax.json", browserHeaders = true)
-            log(format("کنترل ۱) منبع TGJU (اتصال مقایسه‌ای)", tgju))
-
-            val tsetmc = request("https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPrice", browserHeaders = true)
-            log(format("کنترل ۲) دامنه TSETMC (اتصال مقایسه‌ای)", tsetmc))
-
             val base = "https://www.irimo.ir/far/index.php"
             val first = request(base, browserHeaders = false)
             log(format("۱) HTTPS ساده (بدون هدر مرورگر)", first))
@@ -62,8 +54,8 @@ object IrimoConnectionTest {
                         browserHeaders = true
                     )
                     log(format("۶) صفحه جزئیات تهران (شناسه $id)", detail) +
-                        "\\n" + analyzeWeatherPage("صفحه تهران", detail.body))
-                    log("۷) لینک‌ها و بخش‌های هواشناسی قابل کشف در صفحه اصلی\\n" +
+                        "\n" + analyzeWeatherPage("صفحه تهران", detail.body))
+                    log("۷) لینک‌ها و بخش‌های هواشناسی قابل کشف در صفحه اصلی\n" +
                         discoverWeatherLinks(browser.body))
                 } else {
                     log("۶) صفحه جزئیات تهران\nشناسه تهران از صفحه اصلی پیدا نشد؛ متن صفحه برای بررسی در گزارش بالا خلاصه نشده است.")
@@ -115,88 +107,6 @@ object IrimoConnectionTest {
                 "${e.javaClass.simpleName}: ${e.message ?: "بدون جزئیات"}")
         } finally {
             conn?.disconnect()
-        }
-    }
-
-
-    private fun requestWithCertificateTrace(url: String): String {
-        val lines = StringBuilder()
-        val captured = mutableListOf<java.security.cert.X509Certificate>()
-        return try {
-            val tmf = javax.net.ssl.TrustManagerFactory.getInstance(
-                javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm()
-            )
-            tmf.init(null as java.security.KeyStore?)
-            val systemTrust = tmf.trustManagers.filterIsInstance<javax.net.ssl.X509TrustManager>().first()
-            val tracingTrust = object : javax.net.ssl.X509TrustManager {
-                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> =
-                    systemTrust.acceptedIssuers
-
-                override fun checkClientTrusted(
-                    chain: Array<java.security.cert.X509Certificate>, authType: String
-                ) = systemTrust.checkClientTrusted(chain, authType)
-
-                override fun checkServerTrusted(
-                    chain: Array<java.security.cert.X509Certificate>, authType: String
-                ) {
-                    captured.clear()
-                    captured.addAll(chain)
-                    systemTrust.checkServerTrusted(chain, authType)
-                }
-            }
-            val ssl = javax.net.ssl.SSLContext.getInstance("TLS")
-            ssl.init(null, arrayOf(tracingTrust), null)
-            val connection = (URL(url).openConnection() as javax.net.ssl.HttpsURLConnection).apply {
-                sslSocketFactory = ssl.socketFactory
-                connectTimeout = 15000
-                readTimeout = 15000
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36")
-                setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
-            }
-            try {
-                val code = connection.responseCode
-                lines.append("۵) تشخیص زنجیره گواهی IRIMO\\nHTTP: ").append(code)
-            } finally {
-                connection.disconnect()
-            }
-            if (captured.isEmpty()) lines.append("\\nهیچ گواهی‌ای از سرور دریافت نشد.")
-            else lines.append("\\n").append(formatCertificates(captured))
-            lines.append("\\nنتیجه: اعتبارسنجی با گواهی‌های سیستمی اندروید موفق بود.")
-            lines.toString()
-        } catch (e: Exception) {
-            if (captured.isNotEmpty()) {
-                lines.append("۵) تشخیص زنجیره گواهی IRIMO\\n")
-                    .append(formatCertificates(captured))
-                    .append("\\nنتیجه اعتبارسنجی: رد شد؛ ")
-            } else {
-                lines.append("۵) تشخیص زنجیره گواهی IRIMO\\n")
-                    .append("گواهی سرور قبل از تکمیل TLS قابل ثبت نبود؛ ")
-            }
-            lines.append(e.javaClass.simpleName).append(": ").append(e.message ?: "بدون جزئیات")
-            lines.toString()
-        }
-    }
-
-    private fun formatCertificates(
-        chain: List<java.security.cert.X509Certificate>
-    ): String = buildString {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        chain.forEachIndexed { index, cert ->
-            val fingerprint = digest.digest(cert.encoded).joinToString(":") {
-                "%02X".format(java.util.Locale.US, it)
-            }
-            append("گواهی ").append(index + 1).append("\\n")
-            append("Subject: ").append(cert.subjectX500Principal.name).append("\\n")
-            append("Issuer: ").append(cert.issuerX500Principal.name).append("\\n")
-            append("اعتبار از: ").append(cert.notBefore).append("\\n")
-            append("اعتبار تا: ").append(cert.notAfter).append("\\n")
-            append("SHA-256: ").append(fingerprint).append("\\n")
-            val sans = cert.subjectAlternativeNames
-                ?.mapNotNull { item -> item.getOrNull(1)?.toString() }
-                ?.joinToString(", ")
-            if (!sans.isNullOrBlank()) append("نام‌های دامنه: ").append(sans).append("\\n")
-            append("\\n")
         }
     }
 
