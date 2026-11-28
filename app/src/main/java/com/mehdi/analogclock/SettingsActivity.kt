@@ -12,6 +12,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 
@@ -27,6 +29,9 @@ class SettingsActivity : Activity() {
     private var lonEdit: EditText? = null
     private var apiKeyEdit: EditText? = null
     private var irimoTestResult: TextView? = null
+    private var irimoStationSpinner: Spinner? = null
+    private var irimoDataResult: TextView? = null
+    private var irimoStations: List<IrimoWeatherData.Station> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +118,39 @@ class SettingsActivity : Activity() {
                 lonEdit?.setText(SolarCalculator.LONGITUDE.toString())
             }
         })
+
+        root.addView(sectionTitle("داده‌های سازمان هواشناسی ایران (IRIMO)"))
+        root.addView(hint("انتخاب ایستگاه و دریافت اطلاعات مشاهده‌ای، پیش‌بینی سه‌روزه، وضعیت جاده‌ها و هشدارها."))
+        irimoStationSpinner = Spinner(this).apply {
+            setBackgroundColor(0xFF1E2738.toInt())
+        }
+        root.addView(irimoStationSpinner)
+        root.addView(Button(this).apply {
+            text = "بارگذاری فهرست ایستگاه‌ها"
+            setTextColor(0xFFF3F5F7.toInt())
+            setBackgroundColor(0xFF2A3548.toInt())
+            setOnClickListener { loadIrimoStations() }
+        })
+        root.addView(Button(this).apply {
+            text = "دریافت همه داده‌های ایستگاه انتخابی"
+            setTextColor(0xFF0B0F17.toInt())
+            setBackgroundColor(0xFFFFC857.toInt())
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener { fetchIrimoSelectedStation() }
+        })
+        irimoDataResult = TextView(this).apply {
+            text = "برای دریافت اطلاعات، دکمه دریافت را بزنید."
+            textSize = 13f
+            setTextColor(0xFFF3F5F7.toInt())
+            setBackgroundColor(0xFF151D2A.toInt())
+            setPadding(20, 20, 20, 20)
+            setTextIsSelectable(true)
+            typeface = Typeface.MONOSPACE
+        }
+        root.addView(irimoDataResult, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = 10 })
 
         root.addView(sectionTitle("آزمایش اتصال دید افقی IRIMO"))
         root.addView(hint("این آزمایش با اتصال مستقیم اندروید انجام می‌شود، نه WebView؛ بنابراین CORS مرورگر دخالت ندارد. اعتبارسنجی SSL روشن می‌ماند."))
@@ -213,6 +251,32 @@ class SettingsActivity : Activity() {
         })
 
         setContentView(scroll)
+        loadIrimoStations()
+    }
+
+    private fun loadIrimoStations() {
+        irimoDataResult?.text = "در حال دریافت فهرست ایستگاه‌ها از IRIMO…"
+        IrimoWeatherData.loadStations(this) { list ->
+            irimoStations = list
+            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, list)
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            irimoStationSpinner?.adapter = adapter
+            val saved = prefs.getString("irimo_station_url", null)
+            val index = list.indexOfFirst { it.url == saved }.let { if (it >= 0) it else 0 }
+            if (list.isNotEmpty()) irimoStationSpinner?.setSelection(index)
+            irimoDataResult?.text = "تعداد ایستگاه‌های شناسایی‌شده در صفحه اصلی: ${list.size}\nاگر فقط تهران نمایش داده شد، یعنی صفحه اصلی فعلاً لینک ایستگاه دیگری منتشر نکرده است."
+        }
+    }
+
+    private fun fetchIrimoSelectedStation() {
+        val station = irimoStations.getOrNull(irimoStationSpinner?.selectedItemPosition ?: 0)
+        if (station == null) {
+            irimoDataResult?.text = "ابتدا فهرست ایستگاه‌ها را بارگذاری کنید."
+            return
+        }
+        prefs.edit().putString("irimo_station_url", station.url).putString("irimo_station_name", station.name).apply()
+        irimoDataResult?.text = "در حال دریافت داده‌های IRIMO برای ${station.name}…"
+        IrimoWeatherData.fetch(this, station) { report -> irimoDataResult?.text = report }
     }
 
     private fun header(text: String): TextView = TextView(this).apply {
