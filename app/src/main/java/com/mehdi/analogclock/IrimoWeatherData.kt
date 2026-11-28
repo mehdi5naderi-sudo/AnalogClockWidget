@@ -11,10 +11,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 object IrimoWeatherData {
-    data class Station(val name: String, val url: String) {
-        override fun toString() = name
-    }
-
     data class Snapshot(
         val temperature: Int,
         val minimum: Int,
@@ -31,30 +27,6 @@ object IrimoWeatherData {
     private val pool = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val fetching = AtomicBoolean(false)
-
-    fun loadStations(ctx: Context, cb: (List<Station>) -> Unit) {
-        pool.execute {
-            val found = linkedMapOf<String, Station>()
-            try {
-                val html = get(HOME)
-                Regex("(?is)<a\\b[^>]*href=[\\\"']([^\\\"']+)[\\\"'][^>]*>(.*?)</a>")
-                    .findAll(html).forEach {
-                        val href = it.groupValues[1]
-                        val name = clean(it.groupValues[2])
-                        if (name.isNotBlank() &&
-                            (href.contains("wd_id=701") || href.contains("/wd/701-") || href.contains("id=17561"))
-                        ) {
-                            found[name] = Station(name, absolute(href))
-                        }
-                    }
-            } catch (_: Exception) {
-            }
-            if (found.values.none { it.url.contains("17561") }) {
-                found["تهران"] = Station("تهران", TEHRAN)
-            }
-            main.post { cb(found.values.toList()) }
-        }
-    }
 
     fun read(context: Context): Snapshot? {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -78,7 +50,9 @@ object IrimoWeatherData {
         if (!force && now - p.getLong(KEY_FETCHED, 0L) < interval) return
         if (!fetching.compareAndSet(false, true)) return
 
-        val stationUrl = p.getString("irimo_station_url", null)?.takeIf { it.isNotBlank() } ?: TEHRAN
+        // Always use Tehran; ignore any station selection saved by older versions.
+        p.edit().remove("irimo_station_url").remove("irimo_station_name").apply()
+        val stationUrl = TEHRAN
         Thread {
             try {
                 val snapshot = parseStation(get(stationUrl))
@@ -115,50 +89,65 @@ object IrimoWeatherData {
     }
 
     private fun parseStation(html: String): Snapshot? {
-        val rows = Regex("(?is)<tr\\b[^>]*>(.*?)</tr>").findAll(html).map { match ->
-            Regex("(?is)<t[dh]\\b[^>]*>(.*?)</t[dh]>").findAll(match.groupValues[1])
-                .map { clean(it.groupValues[1]) }.filter { it.isNotBlank() }.toList()
-        }.filter { it.isNotEmpty() }.toList()
+        // IRIMO pages contain nested tables and inconsistent label/value cell layouts.
+        // Read both individual table cells and the complete visible text.
+        val cells = Regex("(?is)<t[dh]\\b[^>]*>(.*?)</t[dh]>")
+            .findAll(html)
+            .map { clean(it.groupValues[1]).replace(Regex("\\s+"), " ").trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        val text = clean(html).replace('\u200c', ' ').replace(Regex("\\s+"), " ").trim()
+
+        fun digits(value: String): String = persianToEnglish(value)
+
+        fun numberIn(value: String?): Int {
+            if (value.isNullOrBlank()) return -1
+            val match = Regex("-?\\d+(?:[.,]\\d+)?").find(digits(value)) ?: return -1
+            return match.value.replace(",", ".").toDoubleOrNull()?.toInt() ?: -1
+        }
 
         fun valueFor(vararg labels: String): String? {
-            for (cells in rows) {
-                val index = cells.indexOfFirst { cell -> labels.any { cell.contains(it, true) } }
-                if (index >= 0) {
-                    val sameCell = cells[index].substringAfter(":").trim()
-                    if (sameCell.isNotBlank() && sameCell != cells[index]) return sameCell
-                    for (i in index + 1 until cells.size) {
-                        if (cells[i].isNotBlank()) return cells[i]
-                    }
+            for (i in cells.indices) {
+                val cell = cells[i]
+                val label = labels.firstOrNull { cell.contains(it, true) } ?: continue
+                val after = cell.substringAfter(label, "").trim().trim(':', '：', '-', ' ')
+                if (numberIn(after) >= 0) return after
+                for (j in i + 1 until minOf(i + 4, cells.size)) {
+                    if (numberIn(cells[j]) >= 0) return cells[j]
                 }
             }
-            val lines = clean(html).lines()
-            for (i in lines.indices) {
-                if (labels.any { lines[i].contains(it, true) }) {
-                    val sameLine = lines[i].substringAfter(":").trim()
-                    if (sameLine.isNotBlank() && sameLine != lines[i]) return sameLine
-                    return lines.getOrNull(i + 1)?.takeIf { it.isNotBlank() }
-                }
+            for (label in labels.sortedByDescending { it.length }) {
+                val pattern = Regex(
+                    "(?is)" + Regex.escape(label) + "\\s*[:：]?\\s*([^،؛|]{0,35}?[0-9۰-۹٠-٩][0-9۰-۹٠-٩.,]*)"
+                )
+                val match = pattern.find(text)
+                if (match != null) return match.groupValues[1]
             }
             return null
         }
 
-        fun number(value: String?): Int {
-            if (value.isNullOrBlank()) return -1
-            val normalized = persianToEnglish(value)
-            val match = Regex("-?\\d+(?:[.,]\\d+)?").find(normalized) ?: return -1
-            return match.value.replace(",", ".").toDoubleOrNull()?.toInt() ?: -1
+        val temp = numberIn(valueFor("دمای فعلی", "دمای کنونی", "هوای حاضر", "درجه حرارت"))
+        if (temp == -1) return null
+
+        var min = numberIn(valueFor("کمینه دما", "حداقل دما", "دمای کمینه", "کمینه"))
+        var max = numberIn(valueFor("بیشینه دما", "حداکثر دما", "دمای بیشینه", "بیشینه"))
+        if (min < 0 || max < 0) {
+            val range = Regex("(?is)(?:کمینه\\s*/\\s*بیشینه|حداقل\\s*/\\s*حداکثر)[^0-9۰-۹٠-٩]{0,20}([0-9۰-۹٠-٩]+)\\s*/\\s*([0-9۰-۹٠-٩]+)")
+                .find(text)
+            if (range != null) {
+                if (min < 0) min = numberIn(range.groupValues[1])
+                if (max < 0) max = numberIn(range.groupValues[2])
+            }
         }
 
-        val temp = number(valueFor("هوای حاضر", "دمای فعلی", "دمای کنونی"))
-        if (temp == -1) return null
-        val min = number(valueFor("کمینه دما", "حداقل دما", "کمینه"))
-        val max = number(valueFor("بیشینه دما", "حداکثر دما", "بیشینه"))
-        val visibility = number(valueFor("دید افقی", "عمق دید"))
-        val wind = number(valueFor("سرعت باد"))
-        val updateRaw = valueFor("آخرین بروز رسانی", "آخرین بروزرسانی", "آخرین به روز رسانی", "زمان به روزرسانی")
-        val time = updateRaw?.let {
-            Regex("\\d{1,2}:\\d{2}").find(persianToEnglish(it))?.value
-        }.orEmpty()
+        val visibility = numberIn(valueFor("دید افقی", "عمق دید"))
+        val wind = numberIn(valueFor("سرعت باد"))
+
+        val updateMatch = Regex(
+            "(?is)(?:آخرین\\s*بروز\\s*رسانی|آخرین\\s*بروزرسانی|آخرین\\s*به\\s*روز\\s*رسانی|زمان\\s*به\\s*روزرسانی).{0,80}?([0-9۰-۹٠-٩]{1,2}\\s*:\\s*[0-9۰-۹٠-٩]{2})"
+        ).find(text)
+        val time = updateMatch?.groupValues?.get(1)
+            ?.let { digits(it).replace(" ", "") }.orEmpty()
 
         return Snapshot(temp, min, max, visibility, wind, time)
     }
