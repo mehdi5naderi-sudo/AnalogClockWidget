@@ -48,8 +48,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         when (intent.action) {
             ACTION_REFRESH -> {
                 try {
-                    WeatherData.invalidate(context)
-                    WeatherData.refreshIfNeeded(context, force = true)
+                    IrimoWeatherData.refreshIfNeeded(context, force = true)
                 } catch (_: Exception) {}
                 refreshAll(context)
             }
@@ -144,35 +143,29 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 }
                 views.setTextViewText(R.id.tv_time, timeText)
 
-                // Weather
-                var weather = try { WeatherData.read(context) } catch (_: Exception) { null }
-                val needForce = weather == null
-                try { WeatherData.refreshIfNeeded(context, force = needForce) } catch (_: Exception) {}
-                weather = try { WeatherData.read(context) } catch (_: Exception) { null }
+                // Compact IRIMO observations only
+                val irimo = try { IrimoWeatherData.read(context) } catch (_: Exception) { null }
+                IrimoWeatherData.refreshIfNeeded(context, force = irimo == null)
 
-                if (weather != null) {
-                    // One line: temp · condition · cloud · wind · vis · AQI
+                if (irimo != null) {
                     val parts = mutableListOf<String>()
-                    parts.add("${pd(weather.temperature)}°")
-                    val label = weatherLabel(weather.code)
-                    if (label.isNotEmpty()) parts.add(label)
-                    // Always show wind
-                    parts.add(if (weather.windSpeed > 0) "باد ${pd(weather.windSpeed)}" else "آرام")
-                    if (weather.usAqi >= 0) parts.add("AQI ${pd(weather.usAqi)}")
-                    views.setTextViewText(R.id.tv_condition, parts.joinToString(" · "))
-
-                    // Times: obs · last update
-                    val metaParts = mutableListOf<String>()
-                    if (weather.obsTime.isNotBlank()) {
-                        metaParts.add("داده ${pd(weather.obsTime)}")
+                    parts.add("${pd(irimo.temperature)}°")
+                    if (irimo.minimum >= 0 && irimo.maximum >= 0) {
+                        parts.add("${pd(irimo.minimum)}/${pd(irimo.maximum)}°")
                     }
-                    if (weather.updatedAt > 0L) {
-                        val u = Calendar.getInstance(TimeZone.getTimeZone(SolarCalculator.TIME_ZONE))
-                        u.timeInMillis = weather.updatedAt
-                        val stamp = pd("%02d:%02d".format(u.get(Calendar.HOUR_OF_DAY), u.get(Calendar.MINUTE)))
-                        metaParts.add("آخرین $stamp")
+                    if (irimo.visibilityMeters >= 0) {
+                        val visibility = if (irimo.visibilityMeters >= 1000) {
+                            "${pd((irimo.visibilityMeters + 500) / 1000)}km"
+                        } else {
+                            "${pd(irimo.visibilityMeters)}m"
+                        }
+                        parts.add(visibility)
                     }
-                    views.setTextViewText(R.id.tv_meta, metaParts.joinToString(" · "))
+                    if (irimo.windMetersPerSecond >= 0) {
+                        parts.add("${pd(irimo.windMetersPerSecond)}m/s")
+                    }
+                    views.setTextViewText(R.id.tv_condition, parts.joinToString("  "))
+                    views.setTextViewText(R.id.tv_meta, pd(irimo.updateTime))
                 } else {
                     views.setTextViewText(R.id.tv_condition, "—")
                     views.setTextViewText(R.id.tv_meta, "")
@@ -252,17 +245,6 @@ class ClockWidgetProvider : AppWidgetProvider() {
             } catch (e: Exception) {
                 Log.e(TAG, "updateAppWidget", e)
             }
-        }
-
-        private fun weatherLabel(code: Int): String = when (code) {
-            0 -> "صاف"
-            1, 2 -> "کمی ابر"
-            3 -> "ابری"
-            45, 48 -> "مه/غبار"
-            in 51..67, in 80..82 -> "باران"
-            in 71..77, in 85..86 -> "برف"
-            in 95..99 -> "رعد"
-            else -> ""
         }
 
         private fun pendingIntent(context: Context): PendingIntent {
