@@ -197,7 +197,7 @@ object IrimoWeatherData {
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
             .replace(Regex("[\\t ]+"), " ")
-            .replace(Regex(" *\\n *"), "\\n")
+            .replace(Regex(" *\\n *"), "\n")
             .trim()
 
     private fun persianToEnglish(value: String): String {
