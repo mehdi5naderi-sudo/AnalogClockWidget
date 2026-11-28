@@ -25,6 +25,7 @@ class SettingsActivity : Activity() {
     private val seekBars = mutableMapOf<String, Pair<SeekBar, Int>>()
     private var latEdit: EditText? = null
     private var lonEdit: EditText? = null
+    private var weatherStatus: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +76,13 @@ class SettingsActivity : Activity() {
 
         root.addView(sectionTitle("هواشناسی"))
         root.addView(hint("منبع داده‌ها: ایستگاه هواشناسی تهران — IRIMO"))
+        weatherStatus = TextView(this).apply {
+            text = prefs.getString("irimo_last_status", "هنوز نتیجه‌ای از دریافت ثبت نشده است")
+            textSize = 12f
+            setTextColor(0xFFFFC857.toInt())
+            setPadding(0, 8, 0, 8)
+        }
+        root.addView(weatherStatus)
         addSeek(root, "irimo_refresh_min", "فاصله به‌روزرسانی هوا (دقیقه)", 5, 120, 15)
 
         root.addView(sectionTitle("رفتار ویجت"))
@@ -85,8 +93,11 @@ class SettingsActivity : Activity() {
             setTextColor(0xFFF3F5F7.toInt())
             setBackgroundColor(0xFF2A3548.toInt())
             setOnClickListener {
-                IrimoWeatherData.refreshIfNeeded(this@SettingsActivity, force = true)
-                Toast.makeText(this@SettingsActivity, "در حال دریافت داده‌های IRIMO…", Toast.LENGTH_SHORT).show()
+                weatherStatus?.text = "در حال اتصال به صفحه هواشناسی تهران…"
+                IrimoWeatherData.refreshIfNeeded(this@SettingsActivity, force = true) { message ->
+                    weatherStatus?.text = message
+                    Toast.makeText(this@SettingsActivity, message, Toast.LENGTH_LONG).show()
+                }
             }
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
